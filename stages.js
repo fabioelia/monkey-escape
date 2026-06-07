@@ -12,7 +12,7 @@ const JUNGLE = 0x6bbf59, VINE = 0x3f8f3a, ROCK = 0x9a8c7a, GOLD = 0xffd23f,
 
 export const STAGES = [
   {
-    name: 'Lower Branches', sky: 0xbfe3a0, leaf: 0x6bbf59, par: 16, chimpHeadStart: 3.0, chimpSpeed: 7.2,
+    name: 'Lower Branches', sky: 0xbfe3a0, leaf: 0x6bbf59, par: 16, chimpHeadStart: 3.0, chimpSpeed: 6.0,
     swings: [{ x: 0, y: 6, z: -21, L: 5 }],
     platforms: [
       { x: 0, y: 0, z: 0, w: 8, d: 8, color: CP, checkpoint: 0 },
@@ -28,7 +28,7 @@ export const STAGES = [
     bananas: [{ x: 0, y: 2.4, z: -17 }, { x: 0, y: 3.2, z: -34 }, { x: -3, y: 4.4, z: -49 }],
   },
   {
-    name: 'Treetops', sky: 0x9fd3ff, leaf: 0x4caf50, par: 18, chimpHeadStart: 2.5, chimpSpeed: 7.6,
+    name: 'Treetops', sky: 0x9fd3ff, leaf: 0x4caf50, par: 18, chimpHeadStart: 2.5, chimpSpeed: 6.4,
     platforms: [
       { x: 0, y: 0, z: 0, w: 7, d: 7, color: CP, checkpoint: 0 },
       { x: 2, y: 0.5, z: -8,  w: 2.4, d: 2.4, color: ROCK },
@@ -44,7 +44,7 @@ export const STAGES = [
     bananas: [{ x: -2, y: 2.0, z: -15 }, { x: 0, y: 4.0, z: -38 }, { x: 0, y: 5.4, z: -63 }],
   },
   {
-    name: 'Deep Canopy', sky: 0x4e7a4a, leaf: 0x2f8b3a, par: 22, chimpHeadStart: 2.2, chimpSpeed: 8.0,
+    name: 'Deep Canopy', sky: 0x4e7a4a, leaf: 0x2f8b3a, par: 22, chimpHeadStart: 2.2, chimpSpeed: 6.8,
     swings: [{ x: 0, y: 9, z: -33, L: 5 }],
     platforms: [
       { x: 0, y: 0, z: 0, w: 7, d: 7, color: CP, checkpoint: 0 },
@@ -62,7 +62,7 @@ export const STAGES = [
     bananas: [{ x: 0, y: 2.6, z: -18 }, { x: 0, y: 5.8, z: -41 }, { x: 3, y: 7.0, z: -57 }, { x: -3, y: 7.8, z: -65 }],
   },
   {
-    name: 'Misty Heights', sky: 0xd8e6ee, leaf: 0x7fae6a, par: 24, chimpHeadStart: 2.0, chimpSpeed: 8.3,
+    name: 'Misty Heights', sky: 0xd8e6ee, leaf: 0x7fae6a, par: 24, chimpHeadStart: 2.0, chimpSpeed: 7.1,
     swings: [{ x: 0, y: 8, z: -30, L: 5 }],
     platforms: [
       { x: 0, y: 0, z: 0, w: 7, d: 7, color: CP, checkpoint: 0 },
@@ -79,7 +79,7 @@ export const STAGES = [
     bananas: [{ x: 0, y: 1.8, z: -10 }, { x: 0, y: 4.8, z: -34 }, { x: 0, y: 5.2, z: -42 }, { x: 0, y: 8.5, z: -66 }],
   },
   {
-    name: 'Sunset Boughs', sky: 0xffb070, leaf: 0x9a8a3a, par: 26, chimpHeadStart: 1.8, chimpSpeed: 8.6,
+    name: 'Sunset Boughs', sky: 0xffb070, leaf: 0x9a8a3a, par: 26, chimpHeadStart: 1.8, chimpSpeed: 7.4,
     swings: [{ x: 0, y: 9, z: -52, L: 5 }],
     platforms: [
       { x: 0, y: 0, z: 0, w: 7, d: 7, color: CP, checkpoint: 0 },
@@ -97,7 +97,7 @@ export const STAGES = [
     bananas: [{ x: -2, y: 2.4, z: -16 }, { x: 0, y: 4.6, z: -40 }, { x: 3, y: 7.4, z: -66 }, { x: 0, y: 8.6, z: -75 }],
   },
   {
-    name: 'Great Tree Summit', sky: 0x5b4f8c, leaf: 0x6bbf59, par: 30, chimpHeadStart: 1.6, chimpSpeed: 9.0,
+    name: 'Great Tree Summit', sky: 0x5b4f8c, leaf: 0x6bbf59, par: 30, chimpHeadStart: 1.6, chimpSpeed: 7.8,
     swings: [{ x: 0, y: 9, z: -34, L: 5 }, { x: 0, y: 13, z: -70, L: 6 }],
     platforms: [
       { x: 0, y: 0, z: 0, w: 7, d: 7, color: CP, checkpoint: 0 },

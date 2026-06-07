@@ -228,6 +228,8 @@ const chimp_s = {
   trail: [],            // breadcrumbs of player route
   target: 0,            // index in trail chimp heads toward
   pos: new THREE.Vector3(),
+  vel: new THREE.Vector3(),
+  radius: 0.55, height: 1.9, onGround: false, groundPlat: null, jumpCD: 0,
   active: false,
   speed: 7.2,
   dist: 99,             // current distance to player
@@ -417,7 +419,8 @@ function loadStage(stage, label, depth) {
   monkey.rotation.set(0, 0, 0);
   chimp_s.trail = [spawnPos.clone()];
   chimp_s.target = 0;
-  chimp_s.pos.copy(spawnPos).add(new THREE.Vector3(0, 0, 6)); // behind start
+  chimp_s.pos.set(spawn.base.x, spawn.top + chimp_s.height / 2, spawn.base.z + 3); // behind start, ON the pad
+  chimp_s.vel.set(0, 0, 0); chimp_s.onGround = true; chimp_s.groundPlat = spawn; chimp_s.jumpCD = 0;
   chimp_s.active = false; chimp_s.stun = 0; chimp_s.stuckT = 0;
   chimp_s.speed = stage.chimpSpeed;
   chimp.position.copy(chimp_s.pos);
@@ -486,7 +489,9 @@ function restartStage() {
   // reset chimp: behind the start, head start again
   chimp_s.trail = [spawn.clone()];
   chimp_s.target = 0;
-  chimp_s.pos.copy(spawn).add(new THREE.Vector3(0, 0, 6));
+  const sp0 = platforms[0];
+  chimp_s.pos.set(sp0.base.x, sp0.top + chimp_s.height / 2, sp0.base.z + 3);
+  chimp_s.vel.set(0, 0, 0); chimp_s.onGround = true; chimp_s.groundPlat = sp0; chimp_s.jumpCD = 0;
   chimp_s.active = false; chimp_s.stun = 0; chimp_s.stuckT = 0;
   chimp.position.copy(chimp_s.pos);
   PLAYER.jumpsLeft = 1; PLAYER.dashTimer = 0; PLAYER.flipT = 0; PLAYER.gliding = false;
@@ -762,6 +767,31 @@ function collide(plat) {
   }
 }
 
+// AABB resolve for the chimp body against a platform (lands on top, blocks sides).
+function chimpCollide(plat) {
+  const pr = chimp_s.radius, halfH = chimp_s.height / 2;
+  const c = chimp_s.pos, m = plat.mesh.position;
+  const hx = plat.half.x, hy = plat.half.y, hz = plat.half.z;
+  const minX = m.x - hx - pr, maxX = m.x + hx + pr;
+  const minZ = m.z - hz - pr, maxZ = m.z + hz + pr;
+  const minY = m.y - hy - halfH, maxY = m.y + hy + halfH;
+  if (c.x < minX || c.x > maxX || c.z < minZ || c.z > maxZ || c.y < minY || c.y > maxY) return;
+  const dx = c.x < m.x ? c.x - minX : c.x - maxX;
+  const dz = c.z < m.z ? c.z - minZ : c.z - maxZ;
+  const dy = c.y < m.y ? c.y - minY : c.y - maxY;
+  const ax = Math.abs(dx), ay = Math.abs(dy), az = Math.abs(dz);
+  if (ay <= ax && ay <= az) {
+    if (c.y > m.y) {
+      c.y = maxY;
+      if (chimp_s.vel.y <= 0) { chimp_s.vel.y = 0; chimp_s.onGround = true; chimp_s.groundPlat = plat; }
+    } else { c.y = minY; if (chimp_s.vel.y > 0) chimp_s.vel.y = 0; }
+  } else if (ax <= az) {
+    c.x = c.x < m.x ? minX : maxX;
+  } else {
+    c.z = c.z < m.z ? minZ : maxZ;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Chimp chase — follows the player's route, but smart:
 //   · corner-cuts the breadcrumb trail instead of snaking every node
@@ -823,34 +853,62 @@ function updateChimp(dt, t, sinceStageStart) {
     _aim.copy(trail[Math.min(ti + 1, trail.length - 1)]); // small lookahead = smooth
   }
 
-  // --- speed: anger ramp + strong rubber-band + lunge, with a hard floor so it
-  // NEVER crawls/stalls (relentless, continuous pursuit) ----------------------
-  let spd = chimp_s.speed * (1 + Math.min(0.6, sinceStageStart * 0.015)); // gets angrier
-  if (dPlayer > 16) spd *= 1.7;
-  else if (dPlayer > 9) spd *= 1.35;
-  else if (dPlayer > 5) spd *= 1.12;
-  if (dPlayer < 2.6) spd *= 1.4; // lunge for the grab
-  spd = Math.max(spd, chimp_s.speed * 0.85);
+  // --- pursuit speed: anger ramp + gentle rubber-band + lunge (slower now that
+  // the chimp is bound by gravity/jumping like the monkey) --------------------
+  let spd = chimp_s.speed * (1 + Math.min(0.4, sinceStageStart * 0.01)); // gets angrier
+  if (dPlayer > 16) spd *= 1.3;
+  else if (dPlayer > 9) spd *= 1.15;
+  if (dPlayer < 2.6) spd *= 1.2; // small lunge for the grab
 
-  _dir.subVectors(_aim, chimp_s.pos);
-  const dist = _dir.length();
-  let moved = 0;
-  if (dist > 0.001) {
-    _dir.multiplyScalar(1 / dist);
-    const step = Math.min(spd * dt, dist);
-    chimp_s.pos.addScaledVector(_dir, step);
-    moved = step / dt;
-    chimp.rotation.y = THREE.MathUtils.lerp(chimp.rotation.y, Math.atan2(-_dir.x, -_dir.z), 0.25);
+  // --- PHYSICS: steer horizontally toward the aim; gravity + jumping handle y -
+  const hX = _aim.x - chimp_s.pos.x, hZ = _aim.z - chimp_s.pos.z;
+  const hlen = Math.hypot(hX, hZ) || 1;
+  const dirx = hX / hlen, dirz = hZ / hlen;
+  const ctrl = chimp_s.onGround ? 1 : 0.5; // less control in the air
+  chimp_s.vel.x += (dirx * spd - chimp_s.vel.x) * ctrl * Math.min(1, dt * 12);
+  chimp_s.vel.z += (dirz * spd - chimp_s.vel.z) * ctrl * Math.min(1, dt * 12);
+
+  // jump decisions — it has to LEAP up to higher branches and across gaps
+  chimp_s.jumpCD = Math.max(0, chimp_s.jumpCD - dt);
+  if (chimp_s.onGround && chimp_s.jumpCD <= 0) {
+    const climb = _aim.y - chimp_s.pos.y;
+    let overEdge = false;
+    const gp = chimp_s.groundPlat;
+    if (gp) {
+      const nx = chimp_s.pos.x + dirx * 1.4, nz = chimp_s.pos.z + dirz * 1.4, gm = gp.mesh.position;
+      overEdge = nx < gm.x - gp.half.x || nx > gm.x + gp.half.x || nz < gm.z - gp.half.z || nz > gm.z + gp.half.z;
+    }
+    if (climb > 0.6) { chimp_s.vel.y = Math.min(16.5, Math.sqrt(2 * -GRAVITY * (climb + 0.8))); chimp_s.onGround = false; chimp_s.jumpCD = 0.35; }
+    else if (overEdge && hlen > 1.5) { chimp_s.vel.y = 11.5; chimp_s.onGround = false; chimp_s.jumpCD = 0.35; } // leap the gap
   }
-  chimp.position.copy(chimp_s.pos);
 
-  // anti-stall: if it's barely moving but not near the player, jump its target
-  // forward so it can never get permanently stuck on a node
-  if (moved < spd * 0.25 && dPlayer > 3) chimp_s.stuckT += dt; else chimp_s.stuckT = 0;
-  if (chimp_s.stuckT > 0.4) { chimp_s.target = Math.min(trail.length - 1, ti + 4); chimp_s.stuckT = 0; }
+  // gravity, integrate, collide (same physics the player faces)
+  chimp_s.vel.y += GRAVITY * dt;
+  chimp_s.onGround = false; chimp_s.groundPlat = null;
+  chimp_s.pos.x += chimp_s.vel.x * dt;
+  chimp_s.pos.z += chimp_s.vel.z * dt;
+  chimp_s.pos.y += chimp_s.vel.y * dt;
+  for (const plat of platforms) chimpCollide(plat);
 
-  // caught? -> dramatic catch sequence, then restart
-  if (dPlayer < 1.3) { triggerCaught(); return 0; }
+  // fell off (e.g. chasing a node the player only reached by swinging): climb
+  // back up onto the player's recent route a few nodes behind, and resume
+  if (chimp_s.pos.y < FALL_Y) {
+    const ri = Math.max(0, trail.length - 8);
+    chimp_s.pos.copy(trail[ri]); chimp_s.vel.set(0, 0, 0);
+    chimp_s.onGround = false; chimp_s.target = ri;
+  }
+
+  const moved = Math.hypot(chimp_s.vel.x, chimp_s.vel.z);
+  if (moved > 0.1) chimp.rotation.y = THREE.MathUtils.lerp(chimp.rotation.y, Math.atan2(-chimp_s.vel.x, -chimp_s.vel.z), 0.2);
+
+  // anti-stall: if grounded and barely moving while not near the player, jump
+  // its trail target forward so it can't get permanently stuck
+  if (chimp_s.onGround && moved < spd * 0.3 && dPlayer > 3) chimp_s.stuckT += dt; else chimp_s.stuckT = 0;
+  if (chimp_s.stuckT > 0.5) { chimp_s.target = Math.min(trail.length - 1, ti + 4); chimp_s.stuckT = 0; }
+
+  // caught? -> dramatic catch sequence (must be at a similar height — no grabbing
+  // through a platform)
+  if (dPlayer < 1.5 && Math.abs(chimp_s.pos.y - PLAYER.pos.y) < 1.6) { triggerCaught(); return 0; }
   return Math.min(1, moved / chimp_s.speed); // 0..1 walk amount
 }
 
@@ -1062,7 +1120,7 @@ function tick() {
     chimp_s.pos.lerp(PLAYER.pos, Math.min(1, realDt * 6));
     chimp.rotation.y = Math.atan2(PLAYER.pos.x - chimp_s.pos.x, PLAYER.pos.z - chimp_s.pos.z);
   }
-  chimp.position.copy(chimp_s.pos); chimp.position.y = chimp_s.pos.y - 1.2;
+  chimp.position.copy(chimp_s.pos); chimp.position.y = chimp_s.pos.y - chimp_s.height / 2 + 0.45; // feet on platform
   animateWalk(chimp, t, chimp_s.active ? Math.max(0.4, chimpAmt) : 0);
 
   // camera orbit behind player (+ shake + dash FOV kick)

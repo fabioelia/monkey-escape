@@ -69,7 +69,7 @@ export function generateStage(diff, seed) {
     name: `Level ${diff + 1}`, sky, leaf, night,
     par: Math.round(n * 2.4),
     chimpHeadStart: Math.max(1.4, 3 - diff * 0.22),
-    chimpSpeed: 7.0 + Math.min(3.2, diff * 0.4),
+    chimpSpeed: 5.8 + Math.min(2.6, diff * 0.32),
     platforms, bananas, swings, generated: true,
   };
 }
