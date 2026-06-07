@@ -2,12 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>🐵 Monkey Escape</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #0b1020; font-family: -apple-system, system-ui, sans-serif; }
-    #app { width: 100%; height: 100%; display: block; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden; background: #0b1020;
+      font-family: -apple-system, system-ui, sans-serif;
+      touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #app { width: 100%; height: 100%; display: block; touch-action: none; }
 
     .hud {
       position: fixed; top: 16px; left: 16px; color: #fff;
@@ -122,6 +129,29 @@
     #btnDash { right: 120px; bottom: 70px; }
     #btnThrow { right: 60px; bottom: 130px; }
     #btnPause { right: 16px; top: 16px; width: 48px; height: 48px; font-size: 20px; }
+
+    #banner .bigbtn {
+      margin-top: 14px; font-size: 17px; padding: 12px 26px; border: 0; border-radius: 10px;
+      background: #f2a33c; color: #2a1a08; cursor: pointer; font-weight: 700;
+      box-shadow: 0 8px 24px rgba(242,163,60,.35);
+    }
+
+    /* phones / small screens */
+    @media (max-width: 680px), (pointer: coarse) {
+      #banner { padding: 18px; overflow-y: auto; }
+      #banner h1 { font-size: 30px; }
+      #banner p { font-size: 13px; }
+      .levels { grid-template-columns: repeat(2, 1fr); gap: 8px; max-width: 92vw; }
+      .levels .lvl { font-size: 13px; padding: 11px 8px; }
+      .hud .timer { font-size: 24px; }
+      #danger { font-size: 22px; top: 56px; }
+      #bigtext { font-size: 40px; }
+      #skills { display: none; }
+      /* keep touch controls clear of iOS safe areas */
+      #joystick { left: calc(16px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); }
+      #btnJump { right: calc(20px + env(safe-area-inset-right)); }
+      #btnThrow { right: calc(50px + env(safe-area-inset-right)); }
+    }
   </style>
 </head>
 <body>

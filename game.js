@@ -7,16 +7,18 @@ import { toonMat } from './toon.js';
 import { buildMonkey, buildChimp, buildBanana, animateWalk } from './characters.js';
 import { buildBranch, buildLeafNest, buildMushroom, buildVine, buildTree, buildFloorProp, buildBananaTree, buildHangingPlatform } from './foliage.js';
 import { STAGES } from './stages.js';
+import { generateStage } from './levelgen.js';
 import { sfx, resume as resumeAudio, toggleMute, startMusic, setMusicIntensity, setVolume } from './audio.js';
 
 // ---------------------------------------------------------------------------
 // Renderer / scene / camera
 // ---------------------------------------------------------------------------
 const canvas = document.getElementById('app');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const MOBILE = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !MOBILE });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, MOBILE ? 1.5 : 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = MOBILE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 
@@ -50,7 +52,7 @@ composer.addPass(new OutputPass());
 const sun = new THREE.DirectionalLight(0xfff4d6, 2.4);
 sun.position.set(40, 80, 30);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(MOBILE ? 1024 : 2048, MOBILE ? 1024 : 2048);
 sun.shadow.camera.near = 1; sun.shadow.camera.far = 320;
 const s = 130;
 sun.shadow.camera.left = -s; sun.shadow.camera.right = s;
@@ -72,7 +74,7 @@ scene.add(floor);
 
 // low forest-floor props scattered across the floor
 const PROP_KINDS = ['bush', 'fern', 'rock', 'log'];
-for (let i = 0; i < 60; i++) {
+for (let i = 0; i < (MOBILE ? 28 : 60); i++) {
   const kind = PROP_KINDS[i % PROP_KINDS.length];
   const prop = buildFloorProp(kind, 1 + (i % 3) * 0.6);
   const a = i * 2.39, r = 12 + (i * 7) % 150;
@@ -82,7 +84,7 @@ for (let i = 0; i < 60; i++) {
 
 // background grove — big trees rising from the floor, framing the climb
 const groveTrees = [];
-for (let i = 0; i < 28; i++) {
+for (let i = 0; i < (MOBILE ? 18 : 28); i++) {
   const side = i % 2 ? 1 : -1;
   const h = 40 + (i % 5) * 8;
   const tree = buildTree(h);
@@ -101,7 +103,7 @@ const _camTarget = new THREE.Vector3(), _camPos = new THREE.Vector3(), _camDir =
 const leafPGeo = new THREE.SphereGeometry(0.16, 6, 6);
 const LEAF_COLORS = [0x4caf50, 0x66bb5a, 0xffb070, 0x9a8a3a];
 const leafParticles = [];
-for (let i = 0; i < 30; i++) {
+for (let i = 0; i < (MOBILE ? 16 : 30); i++) {
   const m = new THREE.Mesh(leafPGeo, toonMat(LEAF_COLORS[i % LEAF_COLORS.length]));
   m.scale.set(1.5, 0.35, 1);
   m.position.set((Math.random() - 0.5) * 50, GROUND_Y + Math.random() * 40, 12 - Math.random() * 110);
@@ -123,7 +125,7 @@ const fireflies = new THREE.Group();
 const ffGeo = new THREE.SphereGeometry(0.12, 6, 6);
 const ffMat = new THREE.MeshBasicMaterial({ color: 0xffee66 });
 const ffList = [];
-for (let i = 0; i < 44; i++) {
+for (let i = 0; i < (MOBILE ? 22 : 44); i++) {
   const m = new THREE.Mesh(ffGeo, ffMat);
   m.position.set((Math.random() - 0.5) * 44, 1 + Math.random() * 16, 12 - Math.random() * 110);
   fireflies.add(m);
@@ -217,6 +219,9 @@ let platforms = [], checkpoints = [], goalPlat = null, bananas = [], swingAnchor
 let stageIndex = 0, lastCheckpoint = null, stageStartT = 0, finished = false, running = false;
 let score = 0; // total bananas collected across the run
 let lastCpIndex = 0, cpRewarded = false; // the banana-tree checkpoint + its reward
+// current stage object + display, and procedural "Random Run" state
+let curStage = STAGES[0], curLabel = '', curDepth = 0;
+let randomMode = false, randomDepth = 0, randomSeed = 1;
 
 // Chimp chase state
 const chimp_s = {
@@ -294,9 +299,9 @@ function clearStageMeshes() {
   swingAnchors = [];
 }
 
-function loadStage(i) {
+function loadStage(stage, label, depth) {
   clearStageMeshes();
-  const stage = STAGES[i];
+  curStage = stage; curLabel = label; curDepth = depth;
   const horizon = new THREE.Color(stage.sky);
   scene.fog.color.copy(horizon);
   skyUniforms.bottom.value.copy(horizon);
@@ -421,11 +426,34 @@ function loadStage(i) {
   stageStartT = clock.elapsedTime;
   finished = false; running = false; started = false; paused = false; caughtT = 0; timeScale = 1;
   bigText.style.opacity = '0';
-  chimp.scale.setScalar(0.7 + i * 0.04); // chimp grows bigger/scarier each stage
-  fireflies.visible = (i === STAGES.length - 1); // night summit
-  hudStage.textContent = `Stage ${i + 1}/${STAGES.length} · ${stage.name}`;
+  chimp.scale.setScalar(0.7 + Math.min(0.5, depth * 0.04)); // grows scarier with depth
+  fireflies.visible = !!stage.night;
+  hudStage.textContent = label;
   hudCp.textContent = 'Checkpoint 0';
 }
+
+// --- entry points: curated levels, endless random run, restart current -------
+function startCurated(i) {
+  randomMode = false; stageIndex = i; score = 0; updateScore();
+  loadStage(STAGES[i], `Stage ${i + 1}/${STAGES.length} · ${STAGES[i].name}`, i);
+  lockOrStart();
+}
+function startRandom() {
+  randomMode = true; randomDepth = 0; score = 0; updateScore();
+  randomSeed = (Math.floor(Math.random() * 1e9) >>> 0) || 1;
+  loadStage(generateStage(0, randomSeed), 'Random · Level 1', 0);
+  lockOrStart();
+}
+function nextLevel() {
+  if (randomMode) {
+    randomDepth++; randomSeed = (randomSeed * 1664525 + 1013904223) >>> 0;
+    loadStage(generateStage(randomDepth, randomSeed), `Random · Level ${randomDepth + 1}`, randomDepth);
+    lockOrStart();
+  } else if (stageIndex < STAGES.length - 1) {
+    startCurated(stageIndex + 1);
+  } else { showMenu(); }
+}
+function reloadCurrent() { loadStage(curStage, curLabel, curDepth); lockOrStart(); }
 
 function respawn() {
   PLAYER.pos.copy(lastCheckpoint.pos);
@@ -558,6 +586,7 @@ function beginPlay() {
   if (!started && !finished) { started = true; running = true; stageStartT = clock.elapsedTime; }
   else if (paused) { running = true; paused = false; stageStartT += clock.elapsedTime - pauseAt; } // resume w/o timer jump
   hidePause();
+  if (isTouch) document.getElementById('touchui').style.display = 'block';
 }
 function pauseGame() {
   if (!started || finished || paused || caughtT > 0) return;
@@ -584,7 +613,6 @@ const touchMove = new THREE.Vector2(0, 0);
 let lookId = null, lastLX = 0, lastLY = 0;
 if (isTouch) setupTouch();
 function setupTouch() {
-  const ui = document.getElementById('touchui'); ui.style.display = 'block';
   const sk = document.getElementById('skills'); if (sk) sk.style.display = 'none';
   const joy = document.getElementById('joystick'), knob = document.getElementById('stick');
   let joyId = null, jcx = 0, jcy = 0; const R = 55;
@@ -659,7 +687,7 @@ function showPause() {
   document.getElementById('vol').addEventListener('input', (e) => { audioVol = +e.target.value; setVolume(audioVol); });
   document.getElementById('sens').addEventListener('input', (e) => { lookSens = 0.0022 * +e.target.value; });
   document.getElementById('resume').addEventListener('click', () => lockOrStart());
-  document.getElementById('prestart').addEventListener('click', () => { hidePause(); paused = false; loadStage(stageIndex); lockOrStart(); });
+  document.getElementById('prestart').addEventListener('click', () => { hidePause(); paused = false; reloadCurrent(); });
   document.getElementById('pmenu').addEventListener('click', () => { hidePause(); paused = false; started = false; showMenu(); });
 }
 function hidePause() { pauseEl.style.display = 'none'; }
@@ -746,8 +774,7 @@ const _aim = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 
 function updateChimp(dt, t, sinceStageStart) {
-  const stage = STAGES[stageIndex];
-  if (!chimp_s.active && sinceStageStart > stage.chimpHeadStart && !finished)
+  if (!chimp_s.active && sinceStageStart > curStage.chimpHeadStart && !finished)
     chimp_s.active = true;
 
   const trail = chimp_s.trail;
@@ -1084,11 +1111,23 @@ function completeStage(time) {
   finished = true; running = false; started = false;
   document.exitPointerLock();
   burst(PLAYER.pos, 0xffe23d, 24);
-  // record best time + most bananas
+  if (score > best.bananas) best.bananas = score;
+
+  if (randomMode) {
+    const reached = randomDepth + 1;
+    if (reached > (best.randomDepth || 0)) best.randomDepth = reached;
+    saveBest();
+    sfx.clear();
+    showBanner(`✅ Level ${randomDepth + 1} clear!`,
+      `Time ${time.toFixed(2)}s · 🍌 ${score} · the endless run continues…`,
+      'Next level', () => nextLevel());
+    return;
+  }
+
+  // curated: best time + medal
   const prev = best.times[stageIndex];
   const isBest = prev === undefined || time < prev;
   if (isBest) best.times[stageIndex] = +time.toFixed(2);
-  if (score > best.bananas) best.bananas = score;
   saveBest();
   const medal = medalFor(stageIndex, time);
   const bestStr = `Best ${best.times[stageIndex].toFixed(2)}s`;
@@ -1096,12 +1135,12 @@ function completeStage(time) {
     sfx.clear();
     showBanner(`✅ Stage ${stageIndex + 1} clear! ${medal}`,
       `Time ${time.toFixed(2)}s · ${bestStr}${isBest ? ' — 🎉 new best!' : ''} · 🍌 ${score}`,
-      'Next stage', () => { stageIndex++; loadStage(stageIndex); lockOrStart(); });
+      'Next stage', () => nextLevel());
   } else {
     sfx.win();
     showBanner(`🏆 You got away! ${medal}`,
       `Escaped all ${STAGES.length} stages · last ${time.toFixed(2)}s · 🍌 ${score}`,
-      'Play again', () => { stageIndex = 0; score = 0; updateScore(); loadStage(0); lockOrStart(); });
+      'Play again', () => startCurated(0));
   }
 }
 
@@ -1109,6 +1148,7 @@ function completeStage(time) {
 function showMenu() {
   banner.classList.remove('hidden');
   hidePause();
+  if (isTouch) document.getElementById('touchui').style.display = 'none';
   const btns = STAGES.map((s, i) => {
     const bt = best.times[i];
     const sub = bt !== undefined ? `${medalFor(i, bt)} ${bt.toFixed(2)}s` : '—';
@@ -1117,17 +1157,16 @@ function showMenu() {
   const ctrls = isTouch
     ? 'Joystick to move · buttons to jump / dash / throw 🍌 · drag to look'
     : 'WASD / ↑↓←→ move · Space jump (×2 flip) · hold Space glide · Shift dash · E throw 🍌 · Esc pause · M mute';
+  const rd = best.randomDepth ? ` (best: ${best.randomDepth})` : '';
   banner.innerHTML = `
     <h1>🐵 Monkey Escape</h1>
     <p>You're a monkey fleeing a cranky chimpanzee through the treetops. Swing on vines, reach the big banana tree to clear each stage — get caught and it restarts.</p>
     <p style="margin-top:12px"><strong>Choose a level</strong> &nbsp;·&nbsp; best 🍌 ${best.bananas}</p>
     <div class="levels">${btns}</div>
+    <button id="randombtn" class="bigbtn">🎲 Random Run${rd}</button>
     <p class="ctrls">${ctrls}</p>`;
-  banner.querySelectorAll('.lvl').forEach((b) => b.addEventListener('click', () => {
-    stageIndex = +b.dataset.i; score = 0; updateScore();
-    loadStage(stageIndex);
-    lockOrStart();
-  }));
+  banner.querySelectorAll('.lvl').forEach((b) => b.addEventListener('click', () => startCurated(+b.dataset.i)));
+  document.getElementById('randombtn').addEventListener('click', () => startRandom());
 }
 
 function showBanner(title, sub, btn, onClick) {
@@ -1151,6 +1190,6 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 updateScore();
-loadStage(0);
+loadStage(STAGES[0], 'Stage 1', 0); // a scene to render behind the menu
 showMenu();
 tick();
