@@ -227,6 +227,7 @@ const chimp_s = {
   speed: 7.2,
   dist: 99,             // current distance to player
   stun: 0,              // seconds of banana-stun remaining
+  stuckT: 0,            // time spent making no progress (anti-stall)
 };
 
 // Sparkle particles (banana collect, stage clear) — tiny additive spheres.
@@ -412,7 +413,7 @@ function loadStage(i) {
   chimp_s.trail = [spawnPos.clone()];
   chimp_s.target = 0;
   chimp_s.pos.copy(spawnPos).add(new THREE.Vector3(0, 0, 6)); // behind start
-  chimp_s.active = false; chimp_s.stun = 0;
+  chimp_s.active = false; chimp_s.stun = 0; chimp_s.stuckT = 0;
   chimp_s.speed = stage.chimpSpeed;
   chimp.position.copy(chimp_s.pos);
   monkey.position.copy(PLAYER.pos);
@@ -458,7 +459,7 @@ function restartStage() {
   chimp_s.trail = [spawn.clone()];
   chimp_s.target = 0;
   chimp_s.pos.copy(spawn).add(new THREE.Vector3(0, 0, 6));
-  chimp_s.active = false; chimp_s.stun = 0;
+  chimp_s.active = false; chimp_s.stun = 0; chimp_s.stuckT = 0;
   chimp.position.copy(chimp_s.pos);
   PLAYER.jumpsLeft = 1; PLAYER.dashTimer = 0; PLAYER.flipT = 0; PLAYER.gliding = false;
   PLAYER.swing = null; PLAYER.swingCD = 0;
@@ -751,7 +752,7 @@ function updateChimp(dt, t, sinceStageStart) {
 
   const trail = chimp_s.trail;
   const last = trail[trail.length - 1];
-  if (PLAYER.pos.distanceTo(last) > 1.6) trail.push(PLAYER.pos.clone());
+  if (PLAYER.pos.distanceTo(last) > 1.0) trail.push(PLAYER.pos.clone()); // dense path
 
   if (!chimp_s.active) { chimp.position.copy(chimp_s.pos); return 0; }
 
@@ -765,30 +766,44 @@ function updateChimp(dt, t, sinceStageStart) {
   }
   chimp.rotation.z = 0;
 
-  // corner-cut: skip ahead while the next node is no farther than the current one
-  let ti = chimp_s.target;
-  while (ti < trail.length - 1 &&
-         chimp_s.pos.distanceTo(trail[ti + 1]) <= chimp_s.pos.distanceTo(trail[ti]) + 0.5) ti++;
-  chimp_s.target = ti;
-  const onTail = ti >= trail.length - 1;
-
   const dPlayer = chimp_s.pos.distanceTo(PLAYER.pos);
   chimp_s.dist = dPlayer;
 
-  // aim: predict the player's near future when we're on their tail
-  if (onTail) {
-    const lead = Math.min(0.55, dPlayer / Math.max(4, chimp_s.speed));
+  // --- progress along the trail: monotonic, and skip nodes we've passed ------
+  let ti = chimp_s.target;
+  // 1) consume any node we've effectively reached
+  while (ti < trail.length - 1 && chimp_s.pos.distanceTo(trail[ti]) < 2.2) ti++;
+  // 2) shortcut: if a later node (within a small window) is closer, jump to it —
+  //    keeps the chimp moving forward instead of snaking back to a stale node
+  let bestI = ti, bestD = chimp_s.pos.distanceTo(trail[ti]);
+  for (let k = ti + 1; k < trail.length && k <= ti + 12; k++) {
+    const dk = chimp_s.pos.distanceTo(trail[k]);
+    if (dk < bestD) { bestD = dk; bestI = k; }
+  }
+  ti = Math.max(ti, bestI);
+  chimp_s.target = ti;
+
+  // direct line of sight to the player? (close & roughly level) -> beeline, cut the trail
+  const losToPlayer = dPlayer < 11 && Math.abs(chimp_s.pos.y - PLAYER.pos.y) < 3.5;
+  const nodesLeft = trail.length - 1 - ti;
+
+  // --- aim: pursue the player directly (with prediction) when in sight or near
+  // the end of the trail; otherwise chase a short lookahead along the path -----
+  if (losToPlayer || nodesLeft <= 2) {
+    const lead = Math.min(0.7, dPlayer / Math.max(5, chimp_s.speed));
     _aim.copy(PLAYER.vel).multiplyScalar(lead).add(PLAYER.pos);
   } else {
-    _aim.copy(trail[ti]);
+    _aim.copy(trail[Math.min(ti + 1, trail.length - 1)]); // small lookahead = smooth
   }
 
-  // dynamic speed
-  let spd = chimp_s.speed * (1 + Math.min(0.5, sinceStageStart * 0.012)); // anger ramp
-  if (dPlayer > 14) spd *= 1.45;        // rubber-band catch-up
-  else if (dPlayer > 8) spd *= 1.18;
-  else if (dPlayer < 3) spd *= 0.92;    // ease off so it stays fair
-  if (dPlayer < 2.6) spd *= 1.4;        // lunge for the grab
+  // --- speed: anger ramp + strong rubber-band + lunge, with a hard floor so it
+  // NEVER crawls/stalls (relentless, continuous pursuit) ----------------------
+  let spd = chimp_s.speed * (1 + Math.min(0.6, sinceStageStart * 0.015)); // gets angrier
+  if (dPlayer > 16) spd *= 1.7;
+  else if (dPlayer > 9) spd *= 1.35;
+  else if (dPlayer > 5) spd *= 1.12;
+  if (dPlayer < 2.6) spd *= 1.4; // lunge for the grab
+  spd = Math.max(spd, chimp_s.speed * 0.85);
 
   _dir.subVectors(_aim, chimp_s.pos);
   const dist = _dir.length();
@@ -801,6 +816,11 @@ function updateChimp(dt, t, sinceStageStart) {
     chimp.rotation.y = THREE.MathUtils.lerp(chimp.rotation.y, Math.atan2(-_dir.x, -_dir.z), 0.25);
   }
   chimp.position.copy(chimp_s.pos);
+
+  // anti-stall: if it's barely moving but not near the player, jump its target
+  // forward so it can never get permanently stuck on a node
+  if (moved < spd * 0.25 && dPlayer > 3) chimp_s.stuckT += dt; else chimp_s.stuckT = 0;
+  if (chimp_s.stuckT > 0.4) { chimp_s.target = Math.min(trail.length - 1, ti + 4); chimp_s.stuckT = 0; }
 
   // caught? -> dramatic catch sequence, then restart
   if (dPlayer < 1.3) { triggerCaught(); return 0; }
