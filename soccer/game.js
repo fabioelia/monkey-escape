@@ -397,7 +397,7 @@ function wireNet() {
       'peer-unavailable': 'Could not find the match — ask the host to keep their tab open, or get a fresh link.',
       'connect-failed': 'Found each other, but no network path connects you. ' + RELAY_HINT,
       'negotiation-failed': 'Found each other, but no network path connects you. ' + RELAY_HINT,
-      'unavailable-id': 'This room code is already in use — go back and create a new match.',
+      'unavailable-id': 'This room code is already in use — reload and pick a different code.',
       'network': 'Lost connection to the matchmaking server. Check your network and reload.',
       'browser-incompatible': 'Your browser does not support WebRTC.',
     };
@@ -519,16 +519,33 @@ function maybeRematch() {
 
 const params = new URLSearchParams(location.search);
 let joinRoom = params.get('room');
+let customRoom = null;       // host-chosen room code (optional)
 
-$('btnCreate').onclick = () => { joinRoom = null; showScreen('select'); };
-
-$('btnJoin').onclick = () => {
+function readCodeField(required) {
   const code = $('joinCode').value.trim().toLowerCase();
+  if (!code && !required) return '';
   if (!/^[a-z0-9]{4,8}$/.test(code)) {
-    $('menuStatus').textContent = "Enter the room code shown on your opponent's screen.";
-    return;
+    $('menuStatus').textContent = required
+      ? "Enter the room code shown on your opponent's screen."
+      : 'Room codes are 4–8 letters/numbers.';
+    return null;
   }
   $('menuStatus').textContent = '';
+  return code;
+}
+
+$('btnCreate').onclick = () => {
+  const code = readCodeField(false);
+  if (code === null) return;
+  customRoom = code || null;
+  joinRoom = null;
+  showScreen('select');
+  if (customRoom) $('selectStatus').textContent = `Creating room ${customRoom} — pick your player!`;
+};
+
+$('btnJoin').onclick = () => {
+  const code = readCodeField(true);
+  if (!code) return;
   joinRoom = code;
   showScreen('select');
   $('selectStatus').textContent = `Joining room ${code} — pick your player!`;
@@ -554,7 +571,7 @@ $('btnConfirm').onclick = () => {
   } else {
     // host
     game.chars = [game.myChar, null];
-    const room = NET.makeRoomCode();
+    const room = customRoom || NET.makeRoomCode();
     showScreen('lobby');
     $('lobbyTitle').textContent = 'Match Lobby';
     netStatusEl.textContent = 'Setting up match…';

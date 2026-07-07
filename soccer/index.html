@@ -185,12 +185,13 @@
   <h1>⚽ Pixel Pitch</h1>
   <div class="subtitle">1v1 online pixel soccer — first to 5 goals</div>
   <div style="height:8px"></div>
-  <button id="btnCreate">Create Match</button>
   <div class="joinrow">
-    <input type="text" id="joinCode" maxlength="6" placeholder="room code"
+    <input type="text" id="joinCode" maxlength="8" placeholder="room code"
            autocomplete="off" autocapitalize="off" spellcheck="false">
     <button class="secondary" id="btnJoin">Join</button>
   </div>
+  <button id="btnCreate">Create Match</button>
+  <div class="status" id="menuHint">type a friend's code and Join — or enter your own code (or none) and Create</div>
   <div class="status err" id="menuStatus"></div>
   <div class="controls-hint">
     <kbd>←↑↓→</kbd> / <kbd>WASD</kbd> move &nbsp;·&nbsp;
@@ -248,9 +249,9 @@
   <div class="status" id="overStatus"></div>
 </div>
 
-<script src="peerjs.min.js"></script>
-<script src="characters.js"></script>
-<script src="net.js"></script>
-<script src="game.js"></script>
+<script src="peerjs.min.js?v=5"></script>
+<script src="characters.js?v=5"></script>
+<script src="net.js?v=5"></script>
+<script src="game.js?v=5"></script>
 </body>
 </html>
