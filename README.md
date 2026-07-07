@@ -1,58 +1,52 @@
-# ⚽ Pixel Pitch — 1v1 Online Soccer
+# 🕹️ F1V Arcade
 
-A pixel-art 1v1 soccer game you play in the browser. Pick your player, create
-a match, and send the share link to a friend — first to 5 goals wins.
+Two browser games, no build step — static files only. The root `index.html`
+is a launcher that picks between them.
 
-## Play
+## 🐵 Monkey Escape (`monkey/`)
 
-Serve the folder statically and open `index.html`:
+A 3D treetop chase obby: play a monkey escaping a chimpanzee across six
+treetop stages. Built with [Three.js](https://threejs.org).
 
-```sh
-npx serve .
-```
+**Controls:** WASD/arrows to run, Space to jump. Touch controls on mobile.
 
-1. **Create Match** → pick your player → copy the share link.
-2. Your opponent opens the link, picks their player, and the match kicks off.
+## ⚽ Pixel Pitch (`soccer/`)
 
-Multiplayer uses WebRTC (via [PeerJS](https://peerjs.com) and its free public
-broker) — no game server needed. The host simulates the match; the guest
-streams inputs.
+A pixel-art 1v1 online soccer game. Pick your player, create a match, and
+send the share link to a friend — first to 5 goals wins.
 
-## Controls
+**Controls:** arrows/WASD move · Space steals the ball · Shift shoots.
+Touch stick + buttons on mobile.
 
-| Key | Action |
-| --- | --- |
-| Arrow keys / WASD | Move |
-| Space | Steal the ball (tackle) |
-| Shift | Shoot |
+**Roster:** Ronaldo · Messi · Mbappé · Lamine · Luis Díaz · Neymar ·
+Morgan · Rodman · Horan — all procedurally generated 12×16 pixel sprites.
 
-## Troubleshooting connections
+Multiplayer is WebRTC via [PeerJS](https://peerjs.com) and its free public
+broker — no game server. The host simulates the match; the guest streams
+inputs.
 
-Multiplayer is peer-to-peer (WebRTC). If the lobby says the players found
-each other but no network path connects them:
+### Connection troubleshooting
+
+If the lobby says the players found each other but can't connect:
 
 1. **VPN / office network** — if either player is on one, disconnect it and
-   reload. This is the most common cause (symmetric NAT).
+   reload (symmetric NAT blocks direct WebRTC).
 2. **Add a TURN relay** — create a free account at
-   [metered.ca](https://www.metered.ca/stun-turn) (50 GB/month free), then
-   open the game with your credentials in the URL:
+   [metered.ca](https://www.metered.ca/stun-turn), then open the game with
+   your credentials in the URL:
 
    ```
-   index.html?turn=USERNAME:CREDENTIAL@standard.relay.metered.ca
+   soccer/index.html?turn=USERNAME:CREDENTIAL@standard.relay.metered.ca
    ```
 
    The setting is remembered in the browser and automatically included in
    the share link, so your opponent gets the relay too.
 
-## Roster
+## Run locally
 
-Ronaldo · Messi · Mbappé · Lamine · Luis Díaz · Neymar · Morgan · Rodman · Horan
+```sh
+npx serve .
+```
 
-All sprites are procedurally generated 12×16 pixel art (`characters.js`).
-
-## Files
-
-- `index.html` — UI screens (menu, character select, lobby, game over)
-- `characters.js` — roster + pixel sprite renderer
-- `net.js` — PeerJS host/join + share links
-- `game.js` — match simulation, netcode glue, canvas rendering
+Then open the printed URL — or deploy the repo to any static host
+(GitHub Pages works as-is).

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>🐵 Monkey Escape</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden; background: #0b1020;
+      font-family: -apple-system, system-ui, sans-serif;
+      touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #app { width: 100%; height: 100%; display: block; touch-action: none; }
+
+    .hud {
+      position: fixed; top: 16px; left: 16px; color: #fff;
+      text-shadow: 0 2px 8px rgba(0,0,0,.6); pointer-events: none; user-select: none;
+    }
+    .hud .timer { font-size: 32px; font-weight: 700; letter-spacing: 1px; }
+    .hud .sub { font-size: 14px; opacity: .8; margin-top: 2px; }
+    .hud .score { font-size: 20px; font-weight: 700; opacity: 1; margin-top: 8px; }
+
+    #banner {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+      color: #fff; background: rgba(8,12,28,.78); backdrop-filter: blur(6px);
+      transition: opacity .4s; user-select: none;
+    }
+    #banner h1 { font-size: 44px; margin-bottom: 8px; letter-spacing: 1px; }
+    #banner p  { font-size: 16px; opacity: .85; margin: 4px 0; }
+    #banner .key { background: rgba(255,255,255,.12); border-radius: 6px; padding: 2px 8px; font-family: monospace; }
+    #banner button {
+      margin-top: 22px; font-size: 18px; padding: 12px 30px; border: 0; border-radius: 10px;
+      background: #7c5cff; color: #fff; cursor: pointer; font-weight: 600;
+      box-shadow: 0 8px 24px rgba(124,92,255,.4); transition: transform .1s;
+    }
+    #banner button:hover { transform: translateY(-2px); }
+    #banner.hidden { opacity: 0; pointer-events: none; }
+
+    #vignette {
+      position: fixed; inset: 0; pointer-events: none; opacity: 0;
+      transition: opacity .12s; z-index: 5;
+      box-shadow: inset 0 0 220px 60px rgba(220,30,40,.85);
+    }
+
+    #danger {
+      position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
+      color: #ff4d4d; font-size: 30px; font-weight: 800; letter-spacing: 1px;
+      text-shadow: 0 2px 10px rgba(0,0,0,.7); pointer-events: none; user-select: none;
+      opacity: 0; transition: opacity .15s; z-index: 5; animation: dpulse .5s infinite alternate;
+    }
+    @keyframes dpulse { from { transform: translateX(-50%) scale(1); } to { transform: translateX(-50%) scale(1.12); } }
+
+    #skills {
+      position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 18px; flex-wrap: wrap; justify-content: center;
+      color: #fff; font-size: 13px; pointer-events: none; user-select: none;
+      text-shadow: 0 2px 6px rgba(0,0,0,.7); z-index: 4; max-width: 92vw;
+    }
+    #skills span { background: rgba(20,30,18,.45); padding: 5px 11px; border-radius: 8px; }
+    #skills b { color: #ffe23d; }
+
+    .levels {
+      display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr));
+      gap: 12px; margin: 14px 0 6px; max-width: 560px;
+    }
+    .levels .lvl {
+      font-size: 15px; padding: 14px 12px; border: 0; border-radius: 10px;
+      background: rgba(255,255,255,.12); color: #fff; cursor: pointer; font-weight: 600;
+      transition: transform .1s, background .15s;
+    }
+    .levels .lvl:hover { transform: translateY(-2px); background: #53a13a; }
+    .ctrls { font-size: 13px; opacity: .7; margin-top: 14px; max-width: 560px; }
+    .btnrow { display: flex; gap: 12px; margin-top: 22px; }
+    #banner button.ghost { background: rgba(255,255,255,.14); box-shadow: none; }
+    .levels .lvl { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+    .levels .lvl span { font-size: 13px; font-weight: 600; opacity: .85; }
+
+    /* big dramatic center text (Gotcha!) */
+    #bigtext {
+      position: fixed; top: 42%; left: 50%; transform: translate(-50%,-50%);
+      color: #fff; font-size: 64px; font-weight: 900; letter-spacing: 1px;
+      text-shadow: 0 4px 18px rgba(0,0,0,.8); pointer-events: none; user-select: none;
+      opacity: 0; transition: opacity .15s; z-index: 6;
+    }
+
+    /* goal compass arrow */
+    #goalarrow {
+      position: fixed; top: 50%; left: 50%; font-size: 40px; color: #ffd23f;
+      text-shadow: 0 2px 8px rgba(0,0,0,.7); pointer-events: none; user-select: none;
+      opacity: 0; transition: opacity .2s; z-index: 4;
+    }
+
+    /* pause / settings overlay */
+    #pause {
+      position: fixed; inset: 0; display: none; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center; gap: 8px;
+      color: #fff; background: rgba(8,12,28,.82); backdrop-filter: blur(6px); z-index: 7; user-select: none;
+    }
+    #pause h1 { font-size: 40px; margin-bottom: 10px; }
+    #pause label { display: flex; gap: 10px; align-items: center; font-size: 15px; margin: 4px; }
+    #pause input[type=range] { width: 180px; }
+    #pause button { margin-top: 6px; font-size: 16px; padding: 10px 22px; border: 0; border-radius: 10px;
+      background: #7c5cff; color: #fff; cursor: pointer; font-weight: 600; }
+    #pause button.ghost { background: rgba(255,255,255,.14); }
+
+    /* touch controls */
+    #touchui { position: fixed; inset: 0; display: none; z-index: 5; pointer-events: none; }
+    #joystick {
+      position: absolute; left: 26px; bottom: 26px; width: 130px; height: 130px;
+      border-radius: 50%; background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.25);
+      pointer-events: auto; touch-action: none;
+    }
+    #stick {
+      position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px;
+      border-radius: 50%; background: rgba(255,255,255,.4);
+    }
+    #touchui .tbtn {
+      position: absolute; width: 76px; height: 76px; border-radius: 50%;
+      background: rgba(255,255,255,.18); border: 2px solid rgba(255,255,255,.3);
+      color: #fff; font-size: 26px; font-weight: 700; pointer-events: auto; touch-action: none;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #btnJump { right: 30px; bottom: 40px; }
+    #btnDash { right: 120px; bottom: 70px; }
+    #btnThrow { right: 60px; bottom: 130px; }
+    #btnPause { right: 16px; top: 16px; width: 48px; height: 48px; font-size: 20px; }
+
+    #banner .bigbtn {
+      margin-top: 14px; font-size: 17px; padding: 12px 26px; border: 0; border-radius: 10px;
+      background: #f2a33c; color: #2a1a08; cursor: pointer; font-weight: 700;
+      box-shadow: 0 8px 24px rgba(242,163,60,.35);
+    }
+
+    /* phones / small screens */
+    @media (max-width: 680px), (pointer: coarse) {
+      #banner { padding: 18px; overflow-y: auto; }
+      #banner h1 { font-size: 30px; }
+      #banner p { font-size: 13px; }
+      .levels { grid-template-columns: repeat(2, 1fr); gap: 8px; max-width: 92vw; }
+      .levels .lvl { font-size: 13px; padding: 11px 8px; }
+      .hud .timer { font-size: 24px; }
+      #danger { font-size: 22px; top: 56px; }
+      #bigtext { font-size: 40px; }
+      #skills { display: none; }
+      /* keep touch controls clear of iOS safe areas */
+      #joystick { left: calc(16px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); }
+      #btnJump { right: calc(20px + env(safe-area-inset-right)); }
+      #btnThrow { right: calc(50px + env(safe-area-inset-right)); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="app"></canvas>
+
+  <div id="vignette"></div>
+  <div id="danger">🦍 CHIMP!</div>
+  <div id="bigtext"></div>
+  <div id="goalarrow">➤</div>
+  <div id="pause"></div>
+
+  <div id="touchui">
+    <div id="joystick"><div id="stick"></div></div>
+    <div id="btnJump" class="tbtn">⤒</div>
+    <div id="btnDash" class="tbtn">»</div>
+    <div id="btnThrow" class="tbtn">🍌</div>
+    <div id="btnPause" class="tbtn">⏸</div>
+  </div>
+
+  <div class="hud">
+    <div class="timer" id="timer">0.00</div>
+    <div class="sub" id="stage">Stage 1</div>
+    <div class="sub" id="checkpoint">Checkpoint 0</div>
+    <div class="sub score" id="score">🍌 0</div>
+  </div>
+
+  <div id="skills">
+    <span><b>Space×2</b> Monkey Flip</span>
+    <span><b>Hold Space</b> Glide</span>
+    <span><b>Shift</b> Vine Dash</span>
+    <span><b>E</b> Throw 🍌 (stun chimp)</span>
+  </div>
+
+  <div id="banner"></div>
+
+  <script type="importmap">
+  { "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  } }
+  </script>
+  <script type="module" src="./game.js"></script>
+</body>
+</html>
