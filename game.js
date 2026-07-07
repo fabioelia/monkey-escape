@@ -28,10 +28,14 @@ ctx.imageSmoothingEnabled = false;
 function showScreen(name) {
   for (const k in screens) screens[k].classList.toggle('active', k === name);
   gameWrap.classList.toggle('active', name === 'game');
+  const touchUI = $('touchUI');
+  if (touchUI) touchUI.classList.toggle('on', name === 'game' && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
 }
 
 function fitCanvas() {
-  const scale = Math.max(1, Math.floor(Math.min(innerWidth / W, innerHeight / H)));
+  // integer scale for crisp pixels; fractional below 1x so phones still fit
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  const scale = s >= 1 ? Math.floor(s) : s;
   canvas.style.width = (W * scale) + 'px';
   canvas.style.height = (H * scale) + 'px';
 }
@@ -52,11 +56,40 @@ function beep(freq, dur, type = 'square', vol = 0.04) {
     o.start(); o.stop(AC.currentTime + dur);
   } catch (e) { /* audio unavailable */ }
 }
+function unlockAudio() {
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+  } catch (e) { /* audio unavailable */ }
+}
+addEventListener('touchstart', unlockAudio, { once: true });
+addEventListener('keydown', unlockAudio, { once: true });
+
+function cheer(dur = 0.9) {  // white-noise crowd roar
+  try {
+    unlockAudio();
+    const n = Math.floor(AC.sampleRate * dur);
+    const buf = AC.createBuffer(1, n, AC.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const src = AC.createBufferSource(); src.buffer = buf;
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200;
+    const g = AC.createGain(); g.gain.value = 0.12;
+    src.connect(lp).connect(g).connect(AC.destination);
+    src.start();
+  } catch (e) { /* audio unavailable */ }
+}
+
 const sfx = {
-  kick:  () => beep(220, 0.09),
-  steal: () => beep(140, 0.12, 'sawtooth'),
-  goal:  () => { beep(523, 0.12); setTimeout(() => beep(659, 0.12), 120); setTimeout(() => beep(784, 0.25), 240); },
+  kick:   () => beep(220, 0.09),
+  steal:  () => beep(140, 0.12, 'sawtooth'),
+  bounce: () => beep(330, 0.05, 'square', 0.03),
+  pickup: () => beep(520, 0.05, 'square', 0.025),
+  tick:   () => beep(660, 0.07, 'square', 0.03),
+  goal:   () => { cheer(); beep(523, 0.12); setTimeout(() => beep(659, 0.12), 120); setTimeout(() => beep(784, 0.25), 240); },
   whistle: () => beep(1900, 0.35, 'square', 0.03),
+  win:    () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.16), i * 140)),
+  lose:   () => [392, 330, 262].forEach((f, i) => setTimeout(() => beep(f, 0.2, 'sawtooth', 0.03), i * 180)),
 };
 
 /* ================= Game state ================= */
@@ -73,6 +106,7 @@ const game = {
   rematchRemote: false,
   players: [null, null],
   ball: null,
+  fx: [0, 0, 0, 0],        // event counters: kick, steal, bounce, pickup (streamed so the guest hears them too)
 };
 
 function makePlayer(i) {
@@ -92,6 +126,8 @@ function resetKickoff() {
 
 function startMatch() {
   game.score = [0, 0];
+  game.fx = [0, 0, 0, 0];
+  lastFx = [0, 0, 0, 0];
   game.winner = 0;
   game.rematchLocal = game.rematchRemote = false;
   resetKickoff();
@@ -119,11 +155,46 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 
 function readMove() {
   return {
-    up:    (keys['ArrowUp'] || keys['KeyW']) ? 1 : 0,
-    down:  (keys['ArrowDown'] || keys['KeyS']) ? 1 : 0,
-    left:  (keys['ArrowLeft'] || keys['KeyA']) ? 1 : 0,
-    right: (keys['ArrowRight'] || keys['KeyD']) ? 1 : 0,
+    up:    (keys['ArrowUp'] || keys['KeyW'] || touchMove.up) ? 1 : 0,
+    down:  (keys['ArrowDown'] || keys['KeyS'] || touchMove.down) ? 1 : 0,
+    left:  (keys['ArrowLeft'] || keys['KeyA'] || touchMove.left) ? 1 : 0,
+    right: (keys['ArrowRight'] || keys['KeyD'] || touchMove.right) ? 1 : 0,
   };
+}
+
+/* ---- touch controls (virtual stick + buttons) ---- */
+
+const IS_TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+const touchMove = { up: 0, down: 0, left: 0, right: 0 };
+
+if (IS_TOUCH) {
+  const stick = $('stick'), nub = $('nub');
+  const setStick = (dx, dy) => {
+    const m = Math.hypot(dx, dy);
+    if (m > 42) { dx *= 42 / m; dy *= 42 / m; }
+    nub.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    const t = 12;   // dead zone in px
+    touchMove.left = dx < -t ? 1 : 0; touchMove.right = dx > t ? 1 : 0;
+    touchMove.up = dy < -t ? 1 : 0;   touchMove.down = dy > t ? 1 : 0;
+  };
+  const stickHandler = e => {
+    e.preventDefault();
+    const r = stick.getBoundingClientRect();
+    const t = e.targetTouches[0];
+    if (!t) return;
+    setStick(t.clientX - (r.left + r.width / 2), t.clientY - (r.top + r.height / 2));
+  };
+  stick.addEventListener('touchstart', stickHandler, { passive: false });
+  stick.addEventListener('touchmove', stickHandler, { passive: false });
+  const stickReset = e => { e.preventDefault(); setStick(0, 0); };
+  stick.addEventListener('touchend', stickReset, { passive: false });
+  stick.addEventListener('touchcancel', stickReset, { passive: false });
+
+  const bindBtn = (id, action) => {
+    $(id).addEventListener('touchstart', e => { e.preventDefault(); unlockAudio(); onAction(action); }, { passive: false });
+  };
+  bindBtn('tSteal', 'steal');
+  bindBtn('tShoot', 'shoot');
 }
 
 // Remote (guest) input as seen by the host
@@ -149,7 +220,7 @@ function hostAction(pi, action) {
     p.stealCd = 0.5;
     const d = Math.hypot(b.x - p.x, b.y - p.y);
     if (d < STEAL_RANGE && b.owner !== pi) {
-      if (b.owner === 1 - pi) { o.stun = 0.45; sfx.steal(); }
+      if (b.owner === 1 - pi) { o.stun = 0.45; sfx.steal(); game.fx[1]++; }
       b.owner = pi;
       p.pickupCd = 0;
     }
@@ -163,6 +234,7 @@ function hostAction(pi, action) {
     b.vy = (dy / n) * SHOOT_SPEED;
     p.pickupCd = 0.35;
     sfx.kick();
+    game.fx[0]++;
   }
 }
 
@@ -236,22 +308,23 @@ function hostStep(dt) {
     const f = Math.pow(0.35, dt);   // friction
     ball.vx *= f; ball.vy *= f;
     // walls (top/bottom always; left/right outside the goal mouth)
-    if (ball.y < FIELD.y0 + 2) { ball.y = FIELD.y0 + 2; ball.vy *= -0.8; }
-    if (ball.y > FIELD.y1 - 2) { ball.y = FIELD.y1 - 2; ball.vy *= -0.8; }
+    const thud = () => { if (Math.hypot(ball.vx, ball.vy) > 40) { sfx.bounce(); game.fx[2]++; } };
+    if (ball.y < FIELD.y0 + 2) { ball.y = FIELD.y0 + 2; ball.vy *= -0.8; thud(); }
+    if (ball.y > FIELD.y1 - 2) { ball.y = FIELD.y1 - 2; ball.vy *= -0.8; thud(); }
     const inMouth = ball.y > GOAL.y0 && ball.y < GOAL.y1;
     if (ball.x < FIELD.x0 + 2) {
       if (inMouth) return scoreGoal(1);      // guest scores in left goal
-      ball.x = FIELD.x0 + 2; ball.vx *= -0.8;
+      ball.x = FIELD.x0 + 2; ball.vx *= -0.8; thud();
     }
     if (ball.x > FIELD.x1 - 2) {
       if (inMouth) return scoreGoal(0);      // host scores in right goal
-      ball.x = FIELD.x1 - 2; ball.vx *= -0.8;
+      ball.x = FIELD.x1 - 2; ball.vx *= -0.8; thud();
     }
     // loose-ball pickup on touch
     for (let i = 0; i < 2; i++) {
       const p = game.players[i];
       if (p.pickupCd > 0 || p.stun > 0) continue;
-      if (Math.hypot(ball.x - p.x, ball.y - (p.y + 10)) < PICKUP_RANGE) { ball.owner = i; break; }
+      if (Math.hypot(ball.x - p.x, ball.y - (p.y + 10)) < PICKUP_RANGE) { ball.owner = i; sfx.pickup(); game.fx[3]++; break; }
     }
   }
 }
@@ -276,17 +349,25 @@ function hostBroadcast() {
     p1: [p[0].x, p[0].y, p[0].fx, p[0].fy, p[0].moving ? 1 : 0, p[0].anim, p[0].stun],
     p2: [p[1].x, p[1].y, p[1].fx, p[1].fy, p[1].moving ? 1 : 0, p[1].anim, p[1].stun],
     b: [b.x, b.y, b.owner],
+    f: game.fx,
   });
 }
 
 // Guest-side snapshot targets (positions are smoothed toward these when drawing)
 let guestState = null;
 
+let lastFx = [0, 0, 0, 0];
+const fxSounds = [sfx.kick, sfx.steal, sfx.bounce, sfx.pickup];
+
 function applyGuestState(m) {
   const prevPhase = game.phase;
   game.phase = m.ph; game.phaseT = m.pt; game.score = m.s;
   if (prevPhase !== 'goal' && m.ph === 'goal') sfx.goal();
   if (prevPhase === 'countdown' && m.ph === 'play') sfx.whistle();
+  if (m.f) {
+    for (let i = 0; i < 4; i++) if (m.f[i] !== lastFx[i]) fxSounds[i]();
+    lastFx = m.f.slice();
+  }
   guestState = m;
   if (!game.players[0]) { game.players[0] = makePlayer(0); game.players[1] = makePlayer(1); game.ball = { x: W / 2, y: 126, vx: 0, vy: 0, owner: -1 }; }
   for (let i = 0; i < 2; i++) {
@@ -307,7 +388,15 @@ function guestSmooth() {
 
 function wireNet() {
   NET.onError = err => {
-    netStatusEl.textContent = 'Connection error: ' + (err.type || err);
+    const msgs = {
+      'peer-unavailable': 'Could not find the match — ask the host to keep their tab open, or get a fresh link.',
+      'connect-failed': 'Could not reach the other player (network blocked WebRTC). Try a different network or disable VPN.',
+      'negotiation-failed': 'Could not reach the other player (network blocked WebRTC). Try a different network or disable VPN.',
+      'unavailable-id': 'This room code is already in use — go back and create a new match.',
+      'network': 'Lost connection to the matchmaking server. Check your network and reload.',
+      'browser-incompatible': 'Your browser does not support WebRTC.',
+    };
+    netStatusEl.textContent = msgs[err.type] || ('Connection error: ' + (err.type || err));
     netStatusEl.classList.add('err');
     netStatusEl.classList.remove('pulse');
   };
@@ -402,6 +491,7 @@ function enterOver(msg) {
   const c1 = getCharacter(game.chars[0]), c2 = getCharacter(game.chars[1]);
   const iWon = (NET.isHost && game.winner === 1) || (!NET.isHost && game.winner === 2);
   $('overTitle').textContent = game.winner === 0 ? 'Match Over' : (iWon ? '🏆 You Win!' : 'You Lose');
+  if (game.winner !== 0) (iWon ? sfx.win : sfx.lose)();
   $('overScore').textContent = `${c1.name} ${game.score[0]} — ${game.score[1]} ${c2.name}`;
   $('overStatus').textContent = msg || '';
   $('btnRematch').disabled = !!msg;   // no rematch after a disconnect
@@ -429,6 +519,9 @@ $('btnConfirm').onclick = () => {
     showScreen('lobby');
     $('lobbyTitle').textContent = 'Joining Match';
     netStatusEl.textContent = 'Connecting to opponent…';
+    NET.onRetry = n => {
+      netStatusEl.textContent = `Looking for the match… (attempt ${n + 1})`;
+    };
     NET.onOpen = () => {
       netStatusEl.textContent = 'Connected! Waiting for kickoff…';
       NET.send({ t: 'hello', char: game.myChar });
@@ -440,9 +533,14 @@ $('btnConfirm').onclick = () => {
     const room = NET.makeRoomCode();
     showScreen('lobby');
     $('lobbyTitle').textContent = 'Match Lobby';
-    $('shareUI').style.display = 'flex';
-    $('shareLink').value = NET.shareLink(room);
-    netStatusEl.textContent = 'Waiting for opponent to join…';
+    netStatusEl.textContent = 'Setting up match…';
+    NET.onReady = () => {
+      // Only show the link once the broker knows about us — before that,
+      // a joining guest would get peer-unavailable.
+      $('shareUI').style.display = 'flex';
+      $('shareLink').value = NET.shareLink(room);
+      netStatusEl.textContent = 'Waiting for opponent to join…';
+    };
     NET.onOpen = () => { netStatusEl.textContent = 'Opponent connected!'; };
     NET.host(room);
   }
@@ -580,9 +678,18 @@ function banner(text) {
 /* ================= Main loop ================= */
 
 let lastT = performance.now();
+let lastTickN = -1;
 function frame(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
+
+  // countdown beeps (both sides compute from the streamed phase timer)
+  if (game.phase === 'countdown') {
+    const n = Math.ceil(game.phaseT - 0.5);
+    if (n !== lastTickN) { lastTickN = n; if (n >= 1) sfx.tick(); }
+  } else {
+    lastTickN = -1;
+  }
 
   const inGame = ['countdown', 'play', 'goal'].includes(game.phase);
   if (inGame && game.players[0]) {

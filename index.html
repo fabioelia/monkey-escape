@@ -127,6 +127,32 @@
   .vsline .slot { display: flex; flex-direction: column; align-items: center; gap: 6px; }
   .vsline canvas { image-rendering: pixelated; width: 72px; height: 96px; }
   .vsline .vs { font-size: 28px; color: var(--accent2); font-weight: bold; }
+  /* ===== touch controls (shown only on touch devices) ===== */
+  #touchUI { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  #touchUI.on { display: block; }
+  #stick {
+    position: absolute; left: 20px; bottom: 20px;
+    width: 116px; height: 116px; border-radius: 50%;
+    background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.25);
+    pointer-events: auto; touch-action: none;
+  }
+  #nub {
+    position: absolute; left: 50%; top: 50%;
+    width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(255,255,255,.35);
+    transform: translate(-50%,-50%);
+  }
+  .tbtn {
+    position: absolute; width: 66px; height: 66px; border-radius: 50%;
+    background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.35);
+    color: #fff; font-size: 11px; font-weight: bold; letter-spacing: 1px;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  .tbtn:active { background: rgba(255,255,255,.3); }
+  #tShoot { right: 20px; bottom: 24px; }
+  #tSteal { right: 100px; bottom: 84px; }
+  #game { touch-action: none; }
 </style>
 </head>
 <body>
@@ -141,6 +167,7 @@
     <kbd>←↑↓→</kbd> / <kbd>WASD</kbd> move &nbsp;·&nbsp;
     <kbd>Space</kbd> steal the ball &nbsp;·&nbsp;
     <kbd>Shift</kbd> shoot
+    <br>on mobile: touch stick &amp; buttons appear in-game
   </div>
 </div>
 
@@ -173,6 +200,13 @@
 <!-- ===== GAME ===== -->
 <div id="gameWrap">
   <canvas id="game" width="384" height="216"></canvas>
+</div>
+
+<!-- ===== TOUCH CONTROLS ===== -->
+<div id="touchUI">
+  <div id="stick"><div id="nub"></div></div>
+  <div class="tbtn" id="tSteal">STEAL</div>
+  <div class="tbtn" id="tShoot">SHOOT</div>
 </div>
 
 <!-- ===== GAME OVER ===== -->
