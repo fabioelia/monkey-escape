@@ -518,9 +518,22 @@ function maybeRematch() {
 }
 
 const params = new URLSearchParams(location.search);
-const joinRoom = params.get('room');
+let joinRoom = params.get('room');
 
-$('btnCreate').onclick = () => { showScreen('select'); };
+$('btnCreate').onclick = () => { joinRoom = null; showScreen('select'); };
+
+$('btnJoin').onclick = () => {
+  const code = $('joinCode').value.trim().toLowerCase();
+  if (!/^[a-z0-9]{4,8}$/.test(code)) {
+    $('menuStatus').textContent = "Enter the room code shown on your opponent's screen.";
+    return;
+  }
+  $('menuStatus').textContent = '';
+  joinRoom = code;
+  showScreen('select');
+  $('selectStatus').textContent = `Joining room ${code} — pick your player!`;
+};
+$('joinCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnJoin').click(); });
 
 $('btnConfirm').onclick = () => {
   wireNet();
@@ -549,6 +562,7 @@ $('btnConfirm').onclick = () => {
       // Only show the link once the broker knows about us — before that,
       // a joining guest would get peer-unavailable.
       $('shareUI').style.display = 'flex';
+      $('roomCode').textContent = room;
       $('shareLink').value = NET.shareLink(room);
       netStatusEl.textContent = 'Waiting for opponent to join…';
     };

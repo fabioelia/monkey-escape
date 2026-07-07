@@ -104,6 +104,29 @@
   }
   .status { color: var(--dim); font-size: 14px; min-height: 20px; text-align: center; }
   .status.err { color: #f87171; }
+  .joinrow { display: flex; gap: 8px; }
+  .joinrow input {
+    width: 150px;
+    font-family: inherit;
+    font-size: 16px;
+    letter-spacing: 4px;
+    text-align: center;
+    text-transform: lowercase;
+    background: var(--panel);
+    color: var(--ink);
+    border: 2px solid var(--panel2);
+    padding: 10px;
+  }
+  .joinrow input:focus { outline: none; border-color: var(--dim); }
+  #roomCode {
+    font-size: 30px;
+    font-weight: bold;
+    letter-spacing: 8px;
+    color: var(--accent2);
+    background: var(--panel);
+    border: 3px solid var(--panel2);
+    padding: 8px 20px 8px 28px;
+  }
   #gameWrap { position: relative; display: none; }
   #gameWrap.active { display: block; }
   #game {
@@ -163,6 +186,12 @@
   <div class="subtitle">1v1 online pixel soccer — first to 5 goals</div>
   <div style="height:8px"></div>
   <button id="btnCreate">Create Match</button>
+  <div class="joinrow">
+    <input type="text" id="joinCode" maxlength="6" placeholder="room code"
+           autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button class="secondary" id="btnJoin">Join</button>
+  </div>
+  <div class="status err" id="menuStatus"></div>
   <div class="controls-hint">
     <kbd>←↑↓→</kbd> / <kbd>WASD</kbd> move &nbsp;·&nbsp;
     <kbd>Space</kbd> steal the ball &nbsp;·&nbsp;
@@ -188,7 +217,9 @@
     <div class="slot"><canvas id="p2card" width="12" height="16"></canvas><div id="p2name" class="cname"></div></div>
   </div>
   <div id="shareUI" style="display:none;flex-direction:column;align-items:center;gap:10px;width:100%">
-    <div class="status">Send this link to your opponent:</div>
+    <div class="status">Room code:</div>
+    <div id="roomCode"></div>
+    <div class="status">…or send this link to your opponent:</div>
     <div class="linkbox">
       <input type="text" id="shareLink" readonly>
       <button class="secondary" id="btnCopy">Copy</button>
