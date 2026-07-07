@@ -1,160 +1,117 @@
-import * as THREE from 'three';
-import { part, toonMat } from './toon.js';
+// Pixel-art character roster + sprite renderer.
+// Sprites are 12x16 pixel grids generated from a shared body template with
+// per-character palette (skin/hair/kit) and hair-style overrides.
 
-// All characters face -Z by default (the player's "forward").
-// Each returned group carries userData.limbs = { arms:[], legs:[] } for the
-// walk-cycle animation driven in the main loop.
+const CHARACTERS = [
+  { id: 'ronaldo', name: 'Ronaldo', team: 'Portugal',  skin: '#e8b48c', hair: '#1c1410', style: 'short',    shirt: '#c8102e', trim: '#046a38', shorts: '#046a38', socks: '#c8102e' },
+  { id: 'messi',   name: 'Messi',   team: 'Argentina', skin: '#e8b48c', hair: '#5a3a22', style: 'beard',    shirt: '#75aadb', trim: '#ffffff', shorts: '#1c2340', socks: '#75aadb' },
+  { id: 'mbappe',  name: 'Mbappé',  team: 'France',    skin: '#6f4a2f', hair: '#14100c', style: 'buzz',     shirt: '#1e3a8a', trim: '#ef4444', shorts: '#ffffff', socks: '#ef4444' },
+  { id: 'lamine',  name: 'Lamine',  team: 'Spain',     skin: '#b07a4e', hair: '#14100c', style: 'curly',    shirt: '#e11d2e', trim: '#ffd700', shorts: '#1e3a8a', socks: '#e11d2e' },
+  { id: 'diaz',    name: 'Luis Díaz', team: 'Colombia', skin: '#b07a4e', hair: '#14100c', style: 'curly',   shirt: '#ffd700', trim: '#1e3a8a', shorts: '#1e3a8a', socks: '#e11d2e' },
+  { id: 'neymar',  name: 'Neymar',  team: 'Brazil',    skin: '#d9a06a', hair: '#241a10', style: 'mohawk',   shirt: '#ffd700', trim: '#009739', shorts: '#1e3a8a', socks: '#ffffff' },
+  { id: 'morgan',  name: 'Morgan',  team: 'USA',       skin: '#e8b48c', hair: '#5a3a22', style: 'ponytail', shirt: '#ffffff', trim: '#b31942', shorts: '#0a3161', socks: '#ffffff', band: '#ff69b4' },
+  { id: 'rodman',  name: 'Rodman',  team: 'USA',       skin: '#7a5236', hair: '#2a1810', style: 'ponytail', shirt: '#ffffff', trim: '#b31942', shorts: '#0a3161', socks: '#b31942' },
+  { id: 'horan',   name: 'Horan',   team: 'USA',       skin: '#e8b48c', hair: '#d9b25f', style: 'ponytail', shirt: '#ffffff', trim: '#0a3161', shorts: '#0a3161', socks: '#0a3161' },
+];
 
-function eyes(group, faceZ, spread, y, browColor) {
-  for (const sx of [-1, 1]) {
-    const white = part(new THREE.SphereGeometry(0.16, 12, 12), 0xffffff, 0.05);
-    white.position.set(sx * spread, y, faceZ);
-    white.scale.z = 0.6;
-    const pupil = new THREE.Mesh(
-      new THREE.SphereGeometry(0.08, 10, 10),
-      new THREE.MeshBasicMaterial({ color: 0x1a1320 })
-    );
-    pupil.position.set(0, 0, 0.12);
-    white.add(pupil);
-    group.add(white);
+// Legend: . transparent, S skin, H hair, J shirt, K trim, P shorts, G socks, B shoes, E eye, D headband
+const BODY_FRAMES = [
+  [ // frame 0 — standing / step A
+    '............',
+    '....HHHH....',
+    '...HHHHHH...',
+    '...HSSSSH...',
+    '...SESSES...',
+    '...SSSSSS...',
+    '....SSSS....',
+    '..JJJJJJJJ..',
+    '.KJJJJJJJJK.',
+    '.SJJKJJKJJS.',
+    '.S.JJJJJJ.S.',
+    '..PPPPPPPP..',
+    '..PP....PP..',
+    '..SS....SS..',
+    '..GG....GG..',
+    '..BB....BB..',
+  ],
+  [ // frame 1 — step B (legs shifted)
+    '............',
+    '....HHHH....',
+    '...HHHHHH...',
+    '...HSSSSH...',
+    '...SESSES...',
+    '...SSSSSS...',
+    '....SSSS....',
+    '..JJJJJJJJ..',
+    '.KJJJJJJJJK.',
+    '.SJJKJJKJJS.',
+    '.S.JJJJJJ.S.',
+    '..PPPPPPPP..',
+    '...PP..PP...',
+    '..SS....SS..',
+    '...GG..GG...',
+    '..BB....BB..',
+  ],
+];
 
-    if (browColor !== undefined) {
-      const brow = part(new THREE.BoxGeometry(0.34, 0.09, 0.18), browColor, 0.06);
-      brow.position.set(sx * spread, y + 0.22, faceZ - 0.02);
-      brow.rotation.z = sx * 0.35; // angry slant
-      group.add(brow);
+// Hair-style overrides applied on top of the base grid: [x, y, char]
+const HAIR_STYLES = {
+  short: [],
+  beard: [
+    [3, 5, 'H'], [8, 5, 'H'], [3, 6, 'H'], [8, 6, 'H'], // sideburn beard
+  ],
+  buzz: [
+    [4, 1, '.'], [7, 1, '.'], // tighter cut on top
+  ],
+  curly: [
+    [3, 1, 'H'], [8, 1, 'H'], [2, 2, 'H'], [9, 2, 'H'], [2, 3, 'H'], [9, 3, 'H'], // volume
+  ],
+  mohawk: [
+    [4, 1, '.'], [7, 1, '.'], [5, 0, 'H'], [6, 0, 'H'], // strip on top
+  ],
+  ponytail: [
+    [2, 2, 'H'], [9, 2, 'H'], [9, 3, 'H'], [10, 3, 'H'], [10, 4, 'H'], [10, 5, 'H'], [10, 6, 'H'], // tail on right
+  ],
+};
+
+function buildGrid(ch, frame) {
+  const grid = BODY_FRAMES[frame].map(row => row.split(''));
+  for (const [x, y, c] of (HAIR_STYLES[ch.style] || [])) grid[y][x] = c;
+  if (ch.band) { for (let x = 3; x <= 8; x++) if (grid[2][x] === 'H') grid[2][x] = 'D'; }
+  return grid;
+}
+
+// Renders a character sprite frame onto ctx at (dx, dy), 1 grid px = `px` canvas px.
+// flip=true mirrors horizontally (facing left).
+function drawCharacter(ctx, ch, frame, dx, dy, px, flip) {
+  const grid = buildGrid(ch, frame);
+  const pal = {
+    S: ch.skin, H: ch.hair, J: ch.shirt, K: ch.trim, P: ch.shorts,
+    G: ch.socks, B: '#111111', E: '#1a1a1a', D: ch.band || ch.hair,
+  };
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 12; x++) {
+      const c = grid[y][x];
+      if (c === '.') continue;
+      const col = pal[c];
+      if (!col) continue;
+      const gx = flip ? 11 - x : x;
+      ctx.fillStyle = col;
+      ctx.fillRect(dx + gx * px, dy + y * px, px, px);
     }
   }
 }
 
-function buildApe({ fur, face, scale, angry }) {
-  const g = new THREE.Group();
-  const limbs = { arms: [], legs: [] };
-
-  // torso
-  const body = part(new THREE.CapsuleGeometry(0.55, 0.7, 8, 16), fur);
-  body.position.y = 1.1;
-  g.add(body);
-
-  // belly patch
-  const belly = part(new THREE.SphereGeometry(0.42, 14, 14), face, 0);
-  belly.position.set(0, 1.0, -0.32);
-  belly.scale.set(0.8, 1.05, 0.5);
-  g.add(belly);
-
-  // head
-  const head = part(new THREE.SphereGeometry(0.55, 18, 18), fur);
-  head.position.y = 2.05;
-  g.add(head);
-
-  // face disc
-  const faceDisc = part(new THREE.SphereGeometry(0.46, 16, 16), face, 0);
-  faceDisc.position.set(0, 2.0, -0.28);
-  faceDisc.scale.set(0.95, 1.0, 0.55);
-  g.add(faceDisc);
-
-  // muzzle
-  const muzzle = part(new THREE.SphereGeometry(0.26, 14, 14), face, 0.05);
-  muzzle.position.set(0, 1.82, -0.5);
-  muzzle.scale.set(1.1, 0.7, 0.8);
-  g.add(muzzle);
-
-  // ears
-  for (const sx of [-1, 1]) {
-    const ear = part(new THREE.SphereGeometry(0.2, 12, 12), fur);
-    ear.position.set(sx * 0.55, 2.1, 0.05);
-    ear.scale.z = 0.5;
-    g.add(ear);
-  }
-
-  eyes(g, -0.62, 0.2, 2.08, angry ? fur : undefined);
-  // mouth
-  const mouth = new THREE.Mesh(
-    new THREE.TorusGeometry(0.12, 0.04, 8, 16, Math.PI),
-    new THREE.MeshBasicMaterial({ color: 0x1a1320 })
-  );
-  mouth.position.set(0, 1.74, -0.7);
-  mouth.rotation.x = Math.PI / 2;
-  mouth.rotation.z = angry ? 0 : Math.PI; // smile vs frown
-  g.add(mouth);
-
-  // arms
-  for (const sx of [-1, 1]) {
-    const pivot = new THREE.Group();
-    pivot.position.set(sx * 0.62, 1.5, 0);
-    const arm = part(new THREE.CapsuleGeometry(0.18, 0.7, 6, 10), fur);
-    arm.position.y = -0.45;
-    const hand = part(new THREE.SphereGeometry(0.22, 12, 12), face, 0.06);
-    hand.position.y = -0.85;
-    pivot.add(arm, hand);
-    g.add(pivot);
-    limbs.arms.push(pivot);
-  }
-
-  // legs
-  for (const sx of [-1, 1]) {
-    const pivot = new THREE.Group();
-    pivot.position.set(sx * 0.28, 0.7, 0);
-    const leg = part(new THREE.CapsuleGeometry(0.2, 0.55, 6, 10), fur);
-    leg.position.y = -0.4;
-    const foot = part(new THREE.SphereGeometry(0.22, 12, 12), face, 0.06);
-    foot.position.set(0, -0.72, -0.12);
-    foot.scale.z = 1.4;
-    pivot.add(leg, foot);
-    g.add(pivot);
-    limbs.legs.push(pivot);
-  }
-
-  // tail (only the monkey gets a long one)
-  if (!angry) {
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, 0.8, 0.4),
-      new THREE.Vector3(0, 0.5, 1.1),
-      new THREE.Vector3(0.3, 0.9, 1.5),
-      new THREE.Vector3(0.6, 1.5, 1.4),
-    ]);
-    const tail = part(new THREE.TubeGeometry(curve, 24, 0.1, 8, false), fur, 0.05);
-    g.add(tail);
-  }
-
-  g.scale.setScalar(scale);
-  g.userData.limbs = limbs;
-  return g;
+// Renders a character portrait into a small canvas (for menus).
+function drawPortrait(canvas, ch) {
+  canvas.width = 12;
+  canvas.height = 16;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 12, 16);
+  drawCharacter(ctx, ch, 0, 0, 0, 1, false);
 }
 
-export function buildMonkey() {
-  return buildApe({ fur: 0x9c6b3f, face: 0xf2cda0, scale: 0.55, angry: false });
-}
-
-// Collectible banana — a yellow crescent (partial torus) with brown tips.
-export function buildBanana() {
-  const g = new THREE.Group();
-  const body = part(new THREE.TorusGeometry(0.42, 0.14, 10, 24, 2.3), 0xffe23d, 0.07);
-  body.material.emissive = new THREE.Color(0xffd000);
-  body.material.emissiveIntensity = 0.55; // glow under bloom
-  body.rotation.z = -1.15; // sit the crescent upright
-  g.add(body);
-  for (const end of [0, 2.3]) {
-    const tip = part(new THREE.SphereGeometry(0.13, 8, 8), 0x7a5a20, 0.05);
-    tip.position.set(Math.cos(end) * 0.42, Math.sin(end) * 0.42, 0);
-    body.add(tip);
-  }
-  return g;
-}
-
-export function buildChimp() {
-  return buildApe({ fur: 0x3c2c24, face: 0xc9a87f, scale: 0.7, angry: true });
-}
-
-// Drive a walk cycle. amount in [0..1] = how fast it's moving.
-export function animateWalk(group, t, amount) {
-  const limbs = group.userData.limbs;
-  if (!limbs) return;
-  const swing = Math.sin(t * 11) * 0.7 * amount;
-  if (limbs.arms[0]) limbs.arms[0].rotation.x = swing;
-  if (limbs.arms[1]) limbs.arms[1].rotation.x = -swing;
-  if (limbs.legs[0]) limbs.legs[0].rotation.x = -swing;
-  if (limbs.legs[1]) limbs.legs[1].rotation.x = swing;
-  // little body bob
-  group.position.y += Math.abs(Math.sin(t * 11)) * 0.06 * amount;
+function getCharacter(id) {
+  return CHARACTERS.find(c => c.id === id) || CHARACTERS[0];
 }
