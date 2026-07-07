@@ -2,17 +2,35 @@
 // Sprites are 12x16 pixel grids generated from a shared body template with
 // per-character palette (skin/hair/kit) and hair-style overrides.
 
+// Stats: spd = run speed (px/s), shot = shot speed (px/s),
+// tkl = tackle/steal range (px), ctl = ball-control pickup range (px).
+// cheer = goal-celebration catchphrase.
 const CHARACTERS = [
-  { id: 'ronaldo', name: 'Ronaldo', team: 'Portugal',  skin: '#e8b48c', hair: '#1c1410', style: 'short',    shirt: '#c8102e', trim: '#046a38', shorts: '#046a38', socks: '#c8102e' },
-  { id: 'messi',   name: 'Messi',   team: 'Argentina', skin: '#e8b48c', hair: '#5a3a22', style: 'beard',    shirt: '#75aadb', trim: '#ffffff', shorts: '#1c2340', socks: '#75aadb' },
-  { id: 'mbappe',  name: 'Mbappé',  team: 'France',    skin: '#6f4a2f', hair: '#14100c', style: 'buzz',     shirt: '#1e3a8a', trim: '#ef4444', shorts: '#ffffff', socks: '#ef4444' },
-  { id: 'lamine',  name: 'Lamine',  team: 'Spain',     skin: '#b07a4e', hair: '#14100c', style: 'curly',    shirt: '#e11d2e', trim: '#ffd700', shorts: '#1e3a8a', socks: '#e11d2e' },
-  { id: 'diaz',    name: 'Luis Díaz', team: 'Colombia', skin: '#b07a4e', hair: '#14100c', style: 'curly',   shirt: '#ffd700', trim: '#1e3a8a', shorts: '#1e3a8a', socks: '#e11d2e' },
-  { id: 'neymar',  name: 'Neymar',  team: 'Brazil',    skin: '#d9a06a', hair: '#241a10', style: 'mohawk',   shirt: '#ffd700', trim: '#009739', shorts: '#1e3a8a', socks: '#ffffff' },
-  { id: 'morgan',  name: 'Morgan',  team: 'USA',       skin: '#e8b48c', hair: '#5a3a22', style: 'ponytail', shirt: '#ffffff', trim: '#b31942', shorts: '#0a3161', socks: '#ffffff', band: '#ff69b4' },
-  { id: 'rodman',  name: 'Rodman',  team: 'USA',       skin: '#7a5236', hair: '#2a1810', style: 'ponytail', shirt: '#ffffff', trim: '#b31942', shorts: '#0a3161', socks: '#b31942' },
-  { id: 'horan',   name: 'Horan',   team: 'USA',       skin: '#e8b48c', hair: '#d9b25f', style: 'ponytail', shirt: '#ffffff', trim: '#0a3161', shorts: '#0a3161', socks: '#0a3161' },
+  { id: 'ronaldo', name: 'Ronaldo', team: 'Portugal',  skin: '#e8b48c', hair: '#1c1410', style: 'short',    shirt: '#c8102e', trim: '#046a38', shorts: '#046a38', socks: '#c8102e',
+    spd: 96, shot: 262, tkl: 15, ctl: 11, cheer: 'SIUUU!' },
+  { id: 'messi',   name: 'Messi',   team: 'Argentina', skin: '#e8b48c', hair: '#5a3a22', style: 'beard',    shirt: '#75aadb', trim: '#ffffff', shorts: '#1c2340', socks: '#75aadb',
+    spd: 94, shot: 246, tkl: 14, ctl: 13, cheer: 'GOAT 🐐' },
+  { id: 'mbappe',  name: 'Mbappé',  team: 'France',    skin: '#6f4a2f', hair: '#14100c', style: 'buzz',     shirt: '#1e3a8a', trim: '#ef4444', shorts: '#ffffff', socks: '#ef4444',
+    spd: 103, shot: 250, tkl: 14, ctl: 11, cheer: 'ZOOM 💨' },
+  { id: 'lamine',  name: 'Lamine',  team: 'Spain',     skin: '#b07a4e', hair: '#14100c', style: 'curly',    shirt: '#e11d2e', trim: '#ffd700', shorts: '#1e3a8a', socks: '#e11d2e',
+    spd: 97, shot: 240, tkl: 14, ctl: 12, cheer: 'GOLDEN BOY ✨' },
+  { id: 'diaz',    name: 'Luis Díaz', team: 'Colombia', skin: '#b07a4e', hair: '#14100c', style: 'curly',   shirt: '#ffd700', trim: '#1e3a8a', shorts: '#1e3a8a', socks: '#e11d2e',
+    spd: 96, shot: 242, tkl: 15, ctl: 12, cheer: '¡VAMOS! 🇨🇴' },
+  { id: 'neymar',  name: 'Neymar',  team: 'Brazil',    skin: '#d9a06a', hair: '#241a10', style: 'mohawk',   shirt: '#ffd700', trim: '#009739', shorts: '#1e3a8a', socks: '#ffffff',
+    spd: 95, shot: 246, tkl: 14, ctl: 13, cheer: 'JOGA BONITO 🎩' },
+  { id: 'morgan',  name: 'Morgan',  team: 'USA',       skin: '#e8b48c', hair: '#5a3a22', style: 'ponytail', shirt: '#ffffff', trim: '#b31942', shorts: '#0a3161', socks: '#ffffff', band: '#ff69b4',
+    spd: 95, shot: 246, tkl: 15, ctl: 12, cheer: 'TEA TIME ☕' },
+  { id: 'rodman',  name: 'Rodman',  team: 'USA',       skin: '#7a5236', hair: '#2a1810', style: 'ponytail', shirt: '#ffffff', trim: '#b31942', shorts: '#0a3161', socks: '#b31942',
+    spd: 99, shot: 238, tkl: 17, ctl: 11, cheer: 'BUCKETS ⚡' },
+  { id: 'horan',   name: 'Horan',   team: 'USA',       skin: '#e8b48c', hair: '#d9b25f', style: 'ponytail', shirt: '#ffffff', trim: '#0a3161', shorts: '#0a3161', socks: '#0a3161',
+    spd: 93, shot: 252, tkl: 16, ctl: 12, cheer: 'CAPTAIN 💪' },
 ];
+
+// 1-5 pip ratings for the roster cards, scaled across the roster's ranges.
+function statPips(ch) {
+  const pip = (v, lo, hi) => Math.max(1, Math.min(5, Math.round(1 + 4 * (v - lo) / (hi - lo))));
+  return { spd: pip(ch.spd, 92, 103), sht: pip(ch.shot, 236, 262), tkl: pip(ch.tkl, 13, 17) };
+}
 
 // Legend: . transparent, S skin, H hair, J shirt, K trim, P shorts, G socks, B shoes, E eye, D headband
 const BODY_FRAMES = [

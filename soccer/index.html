@@ -105,6 +105,19 @@
   .status { color: var(--dim); font-size: 14px; min-height: 20px; text-align: center; }
   .status.err { color: #f87171; }
   .joinrow { display: flex; gap: 8px; }
+  .moderow { display: flex; gap: 0; }
+  .modebtn {
+    background: var(--panel);
+    color: var(--dim);
+    border: 2px solid var(--panel2);
+    border-bottom-width: 2px;
+    padding: 8px 18px;
+    font-size: 13px;
+  }
+  .modebtn.selected { background: var(--panel2); color: var(--accent2); border-color: var(--accent2); }
+  .card .cstats { font-size: 9px; color: var(--dim); letter-spacing: 0; line-height: 1.5; }
+  .card .cstats b { color: var(--accent2); font-weight: normal; }
+  .card .crec { font-size: 10px; color: var(--accent); }
   .joinrow input {
     width: 150px;
     font-family: inherit;
@@ -175,6 +188,14 @@
   .tbtn:active { background: rgba(255,255,255,.3); }
   #tShoot { right: 20px; bottom: 24px; }
   #tSteal { right: 100px; bottom: 84px; }
+  #tSprint { right: 104px; bottom: 12px; width: 56px; height: 56px; font-size: 9px; }
+  .emotes { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+  .ebtn {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.3);
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+    pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none;
+  }
   #game { touch-action: none; }
 </style>
 </head>
@@ -190,13 +211,20 @@
            autocomplete="off" autocapitalize="off" spellcheck="false">
     <button class="secondary" id="btnJoin">Join</button>
   </div>
+  <div class="moderow">
+    <button class="modebtn selected" id="modeGoals">First to 5</button>
+    <button class="modebtn" id="modeTimed">Timed 2:00</button>
+  </div>
   <button id="btnCreate">Create Match</button>
+  <div class="joinrow">
+    <button class="secondary" id="btnLocal">Local 2P</button>
+    <button class="secondary" id="btnAI">Vs AI</button>
+  </div>
   <div class="status" id="menuHint">type a friend's code and Join — or enter your own code (or none) and Create</div>
   <div class="status err" id="menuStatus"></div>
   <div class="controls-hint">
-    <kbd>←↑↓→</kbd> / <kbd>WASD</kbd> move &nbsp;·&nbsp;
-    <kbd>Space</kbd> steal the ball &nbsp;·&nbsp;
-    <kbd>Shift</kbd> shoot
+    <kbd>←↑↓→</kbd>/<kbd>WASD</kbd> move · <kbd>Space</kbd> steal · <kbd>Shift</kbd> hold&nbsp;to&nbsp;charge, release&nbsp;to&nbsp;shoot · <kbd>X</kbd> sprint · <kbd>1-4</kbd> emotes
+    <br>local 2P — P1: <kbd>WASD</kbd> <kbd>Q</kbd> steal <kbd>E</kbd> shoot <kbd>F</kbd> sprint · P2: <kbd>←↑↓→</kbd> <kbd>Space</kbd> <kbd>Shift</kbd> <kbd>.</kbd> sprint
     <br>on mobile: touch stick &amp; buttons appear in-game
   </div>
 </div>
@@ -239,6 +267,13 @@
   <div id="stick"><div id="nub"></div></div>
   <div class="tbtn" id="tSteal">STEAL</div>
   <div class="tbtn" id="tShoot">SHOOT</div>
+  <div class="tbtn small" id="tSprint">SPRINT</div>
+  <div class="emotes">
+    <div class="ebtn" data-emote="0">🤝</div>
+    <div class="ebtn" data-emote="1">🔥</div>
+    <div class="ebtn" data-emote="2">🍀</div>
+    <div class="ebtn" data-emote="3">😎</div>
+  </div>
 </div>
 
 <!-- ===== GAME OVER ===== -->
@@ -249,9 +284,9 @@
   <div class="status" id="overStatus"></div>
 </div>
 
-<script src="peerjs.min.js?v=5"></script>
-<script src="characters.js?v=5"></script>
-<script src="net.js?v=5"></script>
-<script src="game.js?v=5"></script>
+<script src="peerjs.min.js?v=6"></script>
+<script src="characters.js?v=6"></script>
+<script src="net.js?v=6"></script>
+<script src="game.js?v=6"></script>
 </body>
 </html>

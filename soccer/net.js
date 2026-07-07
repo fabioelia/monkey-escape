@@ -51,6 +51,8 @@ const NET = {
   onReady: null,    // host only: registered with the broker, link is joinable
   onRetry: null,    // guest only: host not found yet, retrying
   onIce: null,      // ICE connection state updates ('checking', 'connected', 'failed', …)
+  onSpectatorOpen: null,  // host only: an extra viewer connected
+  spectators: [],
   hasTurn: () => !!turnServer(currentTurn()),
   _attempts: 0,
 
@@ -82,7 +84,15 @@ const NET = {
     this.peer.on('disconnected', () => { try { this.peer.reconnect(); } catch (e) {} });
     this.peer.on('error', err => this.onError && this.onError(err));
     this.peer.on('connection', conn => {
-      if (this.conn) { conn.close(); return; } // room is full
+      if (this.conn) {
+        // room is full — extra connections become spectators
+        this.spectators.push(conn);
+        conn.on('open', () => this.onSpectatorOpen && this.onSpectatorOpen(conn));
+        const drop = () => { this.spectators = this.spectators.filter(c => c !== conn); };
+        conn.on('close', drop);
+        conn.on('error', drop);
+        return;
+      }
       this.conn = conn;
       this.onGuestFound && this.onGuestFound();
       this._wire(conn);
@@ -138,7 +148,7 @@ const NET = {
     const fail = err => {
       clearTimeout(conn._watchdog);
       if (conn !== this.conn) return;           // stale connection, ignore
-      if (conn._up) { this.onClose && this.onClose(); return; }
+      if (conn._up) { this.conn = null; this.onClose && this.onClose(); return; }
       this.conn = null;
       if (this.isHost) {
         this.onGuestLost && this.onGuestLost();  // free the slot, keep waiting
@@ -165,5 +175,18 @@ const NET = {
 
   send(obj) {
     if (this.conn && this.conn.open) this.conn.send(obj);
+  },
+
+  // send to the opponent AND every spectator
+  broadcast(obj) {
+    this.send(obj);
+    for (const c of this.spectators) if (c.open) c.send(obj);
+  },
+
+  // guest: try to re-establish a dropped match connection (host peer id unchanged)
+  rejoin() {
+    this._attempts = 0;
+    this._negFails = 0;
+    this._connectToHost();
   },
 };
