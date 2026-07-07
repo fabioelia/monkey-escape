@@ -387,11 +387,16 @@ function guestSmooth() {
 }
 
 function wireNet() {
+  const RELAY_HINT = NET.hasTurn()
+    ? 'Your TURN relay did not help — double-check the credentials.'
+    : 'Fix: if either player is on a VPN or office network, disconnect it and reload. ' +
+      'Or add a relay server: grab free TURN credentials at metered.ca and reopen the game as ' +
+      '?turn=USERNAME:CREDENTIAL@standard.relay.metered.ca — the share link passes it to your opponent automatically.';
   NET.onError = err => {
     const msgs = {
       'peer-unavailable': 'Could not find the match — ask the host to keep their tab open, or get a fresh link.',
-      'connect-failed': 'Could not reach the other player (network blocked WebRTC). Try a different network or disable VPN.',
-      'negotiation-failed': 'Could not reach the other player (network blocked WebRTC). Try a different network or disable VPN.',
+      'connect-failed': 'Found each other, but no network path connects you. ' + RELAY_HINT,
+      'negotiation-failed': 'Found each other, but no network path connects you. ' + RELAY_HINT,
       'unavailable-id': 'This room code is already in use — go back and create a new match.',
       'network': 'Lost connection to the matchmaking server. Check your network and reload.',
       'browser-incompatible': 'Your browser does not support WebRTC.',
@@ -399,6 +404,12 @@ function wireNet() {
     netStatusEl.textContent = msgs[err.type] || ('Connection error: ' + (err.type || err));
     netStatusEl.classList.add('err');
     netStatusEl.classList.remove('pulse');
+  };
+  NET.onIce = state => {
+    // live negotiation feedback while still in the lobby
+    if (game.phase !== 'idle' || netStatusEl.classList.contains('err')) return;
+    if (state === 'checking') netStatusEl.textContent = 'Negotiating connection…';
+    else if (state === 'failed' || state === 'disconnected') netStatusEl.textContent = 'Connection attempt failed — retrying…';
   };
   NET.onClose = () => {
     if (game.phase === 'end' || game.phase === 'idle') return;
@@ -542,6 +553,8 @@ $('btnConfirm').onclick = () => {
       netStatusEl.textContent = 'Waiting for opponent to join…';
     };
     NET.onOpen = () => { netStatusEl.textContent = 'Opponent connected!'; };
+    NET.onGuestFound = () => { netStatusEl.textContent = 'Opponent found — connecting…'; };
+    NET.onGuestLost = () => { netStatusEl.textContent = 'Connection with opponent failed — they are retrying…'; };
     NET.host(room);
   }
 };

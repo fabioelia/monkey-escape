@@ -26,6 +26,24 @@ streams inputs.
 | Space | Steal the ball (tackle) |
 | Shift | Shoot |
 
+## Troubleshooting connections
+
+Multiplayer is peer-to-peer (WebRTC). If the lobby says the players found
+each other but no network path connects them:
+
+1. **VPN / office network** — if either player is on one, disconnect it and
+   reload. This is the most common cause (symmetric NAT).
+2. **Add a TURN relay** — create a free account at
+   [metered.ca](https://www.metered.ca/stun-turn) (50 GB/month free), then
+   open the game with your credentials in the URL:
+
+   ```
+   index.html?turn=USERNAME:CREDENTIAL@standard.relay.metered.ca
+   ```
+
+   The setting is remembered in the browser and automatically included in
+   the share link, so your opponent gets the relay too.
+
 ## Roster
 
 Ronaldo · Messi · Mbappé · Lamine · Luis Díaz · Neymar · Morgan · Rodman · Horan
